@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import type { Column, Item, ColumnType, View } from '../../types';
 import { useCreateItem, useUpdateItem, useDeleteItem } from '../../hooks/useItems';
 import { useAddColumn, useDeleteColumn, useUpdateColumn, useReorderColumns, useUpdateView } from '../../hooks/useLists';
-import { AddColumnModal, ColumnHeaderMenu } from '../columns';
+import { AddColumnModal, EditColumnModal } from '../columns';
 import { DateCell, ChoiceCell, BooleanCell, CurrencyCell, HyperlinkCell } from '../cells';
 import { ConfirmModal } from '../ui';
 
@@ -28,6 +28,7 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
   const [editingCell, setEditingCell] = useState<{ itemId: string; columnId: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
+  const [editingColumn, setEditingColumn] = useState<Column | null>(null);
   
   // Get default view and its sort config
   const defaultView = views.find(v => v.is_default) || views[0];
@@ -167,20 +168,12 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
     addColumn.mutate({ listId, name, column_type: columnType, config });
   };
 
-  const handleDeleteColumn = (columnId: string, columnName: string) => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Delete Column',
-      message: `Are you sure you want to delete the column "${columnName}"? All data in this column will be lost.`,
-      onConfirm: () => {
-        deleteColumn.mutate({ listId, columnId });
-        setConfirmModal(m => ({ ...m, isOpen: false }));
-      },
-    });
+  const handleDeleteColumn = (columnId: string) => {
+    deleteColumn.mutate({ listId, columnId });
   };
 
-  const handleRenameColumn = (columnId: string, newName: string) => {
-    updateColumn.mutate({ listId, columnId, name: newName });
+  const handleSaveColumn = (columnId: string, updates: { name?: string; config?: Record<string, unknown> }) => {
+    updateColumn.mutate({ listId, columnId, ...updates });
   };
 
   const startEditing = (itemId: string, columnId: string, currentValue: unknown) => {
@@ -402,12 +395,19 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
                     {column.name}
                     {getSortIcon(column.id)}
                   </span>
-                  <ColumnHeaderMenu
-                    columnId={column.id}
-                    columnName={column.name}
-                    onRename={(newName) => handleRenameColumn(column.id, newName)}
-                    onDelete={() => handleDeleteColumn(column.id, column.name)}
-                  />
+                  <button
+                    className="btn btn-ghost btn-xs opacity-50 hover:opacity-100 px-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingColumn(column);
+                    }}
+                    title="Edit column"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </button>
                   {column.is_required && <span className="text-error ml-1">*</span>}
                 </div>
               </th>
@@ -462,6 +462,14 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
         isOpen={isAddColumnOpen}
         onClose={() => setIsAddColumnOpen(false)}
         onAdd={handleAddColumn}
+      />
+
+      <EditColumnModal
+        isOpen={editingColumn !== null}
+        column={editingColumn}
+        onClose={() => setEditingColumn(null)}
+        onSave={handleSaveColumn}
+        onDelete={handleDeleteColumn}
       />
 
       <ConfirmModal

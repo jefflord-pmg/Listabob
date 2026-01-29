@@ -37,7 +37,7 @@ export function ChoiceCell({ value, choices, onChange, multiple = false }: Choic
   };
 
   const selectedValues = multiple && value 
-    ? (typeof value === 'string' ? [value] : (value as unknown as string[]))
+    ? (typeof value === 'string' ? value.split(',').filter(Boolean) : (value as unknown as string[]))
     : (value ? [value] : []);
 
   const handleSelect = (choice: string) => {
