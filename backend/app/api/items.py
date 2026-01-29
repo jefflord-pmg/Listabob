@@ -83,15 +83,13 @@ def item_to_response(item: Item, columns: list[Column], db: Session) -> ItemResp
 @router.get("", response_model=list[ItemResponse])
 def get_items(
     list_id: str,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db)
 ):
     db_list = db.query(List).filter(List.id == list_id).first()
     if not db_list:
         raise HTTPException(status_code=404, detail="List not found")
     
-    items = db.query(Item).filter(Item.list_id == list_id).offset(skip).limit(limit).all()
+    items = db.query(Item).filter(Item.list_id == list_id).order_by(Item.position).all()
     return [item_to_response(item, db_list.columns, db) for item in items]
 
 

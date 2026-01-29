@@ -15,8 +15,9 @@ export function useCreateItem() {
   return useMutation({
     mutationFn: ({ listId, ...payload }: { listId: string } & CreateItemPayload) =>
       itemsApi.create(listId, payload),
-    onSuccess: (_, variables) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['items', variables.listId] });
+      return data; // Return the created item
     },
   });
 }

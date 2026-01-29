@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import type { Column, Item, ColumnType, View } from '../../types';
 import { useCreateItem, useUpdateItem, useDeleteItem } from '../../hooks/useItems';
 import { useAddColumn, useDeleteColumn, useUpdateColumn, useReorderColumns, useUpdateView } from '../../hooks/useLists';
@@ -50,6 +50,10 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
     onConfirm: () => void;
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
+  // Track newly created item IDs to show at bottom
+  const [newItemIds, setNewItemIds] = useState<Set<string>>(new Set());
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+
   // Filter items based on active filters
   const filteredItems = useMemo(() => {
     if (Object.keys(filters).length === 0) return items;
@@ -77,14 +81,22 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
         // Handle different column types
         if (column.column_type === 'multiple_choice' && typeof itemValue === 'string') {
           // For multiple choice, match if ANY of the item's values match ANY filter value
-          const itemValues = itemValue.split(',').map(v => v.trim());
-          const hasMatch = itemValues.some(v => filterValues.has(v));
+          const itemValues = itemValue.split(',').map(v => v.trim().toLowerCase());
+          const filterLower = new Set([...filterValues].map(v => v.toLowerCase()));
+          const hasMatch = itemValues.some(v => filterLower.has(v));
           if (!hasMatch && !filterValues.has('__empty__')) {
             return false;
           }
         } else if (column.column_type === 'boolean') {
           const boolStr = itemValue ? 'Yes' : 'No';
           if (!filterValues.has(boolStr)) {
+            return false;
+          }
+        } else if (column.column_type === 'text') {
+          // Case-insensitive match for text columns
+          const itemLower = String(itemValue).toLowerCase();
+          const filterLower = new Set([...filterValues].map(v => v.toLowerCase()));
+          if (!filterLower.has(itemLower)) {
             return false;
           }
         } else {
@@ -100,34 +112,43 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
 
   // Sorted items based on view config
   const sortedItems = useMemo(() => {
-    if (!sortColumnId || !sortDirection) return filteredItems;
+    // Separate new items from regular items
+    const regularItems = filteredItems.filter(item => !newItemIds.has(item.id));
+    const newItems = filteredItems.filter(item => newItemIds.has(item.id));
     
-    const column = columns.find(c => c.id === sortColumnId);
-    if (!column) return filteredItems;
+    let sortedRegular = regularItems;
     
-    return [...filteredItems].sort((a, b) => {
-      const aVal = a.values[sortColumnId];
-      const bVal = b.values[sortColumnId];
-      
-      // Handle null/undefined
-      if (aVal == null && bVal == null) return 0;
-      if (aVal == null) return sortDirection === 'asc' ? 1 : -1;
-      if (bVal == null) return sortDirection === 'asc' ? -1 : 1;
-      
-      let comparison = 0;
-      if (column.column_type === 'number' || column.column_type === 'currency' || column.column_type === 'rating') {
-        comparison = Number(aVal) - Number(bVal);
-      } else if (column.column_type === 'boolean') {
-        comparison = (aVal === bVal) ? 0 : aVal ? -1 : 1;
-      } else if (column.column_type === 'date' || column.column_type === 'datetime') {
-        comparison = new Date(String(aVal)).getTime() - new Date(String(bVal)).getTime();
-      } else {
-        comparison = String(aVal).localeCompare(String(bVal));
+    if (sortColumnId && sortDirection) {
+      const column = columns.find(c => c.id === sortColumnId);
+      if (column) {
+        sortedRegular = [...regularItems].sort((a, b) => {
+          const aVal = a.values[sortColumnId];
+          const bVal = b.values[sortColumnId];
+          
+          // Handle null/undefined
+          if (aVal == null && bVal == null) return 0;
+          if (aVal == null) return sortDirection === 'asc' ? 1 : -1;
+          if (bVal == null) return sortDirection === 'asc' ? -1 : 1;
+          
+          let comparison = 0;
+          if (column.column_type === 'number' || column.column_type === 'currency' || column.column_type === 'rating') {
+            comparison = Number(aVal) - Number(bVal);
+          } else if (column.column_type === 'boolean') {
+            comparison = (aVal === bVal) ? 0 : aVal ? -1 : 1;
+          } else if (column.column_type === 'date' || column.column_type === 'datetime') {
+            comparison = new Date(String(aVal)).getTime() - new Date(String(bVal)).getTime();
+          } else {
+            comparison = String(aVal).localeCompare(String(bVal));
+          }
+          
+          return sortDirection === 'desc' ? -comparison : comparison;
+        });
       }
-      
-      return sortDirection === 'desc' ? -comparison : comparison;
-    });
-  }, [filteredItems, sortColumnId, sortDirection, columns]);
+    }
+    
+    // New items always go at the bottom
+    return [...sortedRegular, ...newItems];
+  }, [filteredItems, sortColumnId, sortDirection, columns, newItemIds]);
 
   const handleSort = (columnId: string) => {
     if (!defaultView) return;
@@ -211,8 +232,17 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
     setDragOverColumnId(null);
   };
 
-  const handleAddRow = () => {
-    createItem.mutate({ listId, values: {} });
+  const handleAddRow = async () => {
+    const result = await createItem.mutateAsync({ listId, values: {} });
+    if (result?.id) {
+      setNewItemIds(prev => new Set(prev).add(result.id));
+      // Scroll to the bottom of the table container after a brief delay for render
+      setTimeout(() => {
+        if (tableContainerRef.current) {
+          tableContainerRef.current.scrollTop = tableContainerRef.current.scrollHeight;
+        }
+      }, 150);
+    }
   };
 
   const handleAddColumn = (name: string, columnType: ColumnType, config?: Record<string, unknown>) => {
@@ -244,6 +274,15 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
       value = editValue === 'true';
     }
     
+    // Remove from new items when edited
+    if (newItemIds.has(editingCell.itemId)) {
+      setNewItemIds(prev => {
+        const next = new Set(prev);
+        next.delete(editingCell.itemId);
+        return next;
+      });
+    }
+    
     updateItem.mutate({
       listId,
       itemId: editingCell.itemId,
@@ -273,6 +312,14 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
   };
 
   const handleCellChange = (itemId: string, columnId: string, value: unknown) => {
+    // Remove from new items when edited - it will sort into place on next render
+    if (newItemIds.has(itemId)) {
+      setNewItemIds(prev => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
+    }
     updateItem.mutate({
       listId,
       itemId,
@@ -424,9 +471,9 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
   return (
     <div className="flex h-full">
       {/* Main content */}
-      <div className="flex-1 overflow-x-auto">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {/* Toolbar */}
-        <div className="flex items-center gap-2 mb-2 px-1">
+        <div className="flex items-center gap-2 mb-2 px-1 flex-shrink-0">
           <button
             className={`btn btn-sm ${hasActiveFilters ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
@@ -439,15 +486,15 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
               <span className="badge badge-sm">{Object.values(filters).reduce((sum, s) => sum + s.size, 0)}</span>
             )}
           </button>
-          {hasActiveFilters && (
-            <span className="text-sm text-base-content/60">
-              {sortedItems.length} of {items.length} items
-            </span>
-          )}
+          <span className="text-sm text-base-content/60">
+            {hasActiveFilters ? `${sortedItems.length} of ${items.length}` : items.length} item{items.length !== 1 ? 's' : ''}
+          </span>
         </div>
 
+        {/* Table container with scroll */}
+        <div ref={tableContainerRef} className="flex-1 overflow-auto">
         <table className="table table-sm">
-          <thead>
+          <thead className="sticky top-0 z-10">
             <tr>
               {columns.map((column) => (
                 <th 
@@ -503,8 +550,11 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
           </tr>
         </thead>
         <tbody>
-          {sortedItems.map((item) => (
-            <tr key={item.id} className="hover">
+          {sortedItems.map((item, index) => (
+            <tr 
+              key={item.id} 
+              className={`hover ${newItemIds.has(item.id) ? 'bg-primary/10' : ''}`}
+            >
               {columns.map((column) => (
                 <td key={column.id}>{renderCell(item, column)}</td>
               ))}
@@ -522,9 +572,10 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
           ))}
         </tbody>
       </table>
+      </div>
       
       <button
-        className="btn btn-ghost btn-sm mt-2"
+        className="btn btn-ghost btn-sm mt-2 flex-shrink-0"
         onClick={handleAddRow}
         disabled={createItem.isPending}
       >

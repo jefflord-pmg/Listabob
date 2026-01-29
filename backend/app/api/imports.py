@@ -90,16 +90,38 @@ def guess_column_type(values: list[str]) -> tuple[ColumnType, list[str] | None]:
             pass
         return ColumnType.NUMBER, None
     
-    # Check for dates
+    # Check for dates and datetimes using common formats
+    datetime_patterns = [
+        # ISO formats with time
+        r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?',  # 2024-01-15T10:30:00 or 2024-01-15 10:30
+        r'^\d{2}/\d{2}/\d{4}\s+\d{1,2}:\d{2}',  # 01/15/2024 10:30
+        r'^\d{2}-\d{2}-\d{4}\s+\d{1,2}:\d{2}',  # 01-15-2024 10:30
+    ]
+    
     date_patterns = [
-        r'^\d{4}-\d{2}-\d{2}$',  # YYYY-MM-DD
+        r'^\d{4}-\d{2}-\d{2}$',  # YYYY-MM-DD (ISO)
         r'^\d{2}/\d{2}/\d{4}$',  # MM/DD/YYYY
         r'^\d{2}-\d{2}-\d{4}$',  # MM-DD-YYYY
         r'^\d{4}/\d{2}/\d{2}$',  # YYYY/MM/DD
+        r'^\d{1,2}/\d{1,2}/\d{2,4}$',  # M/D/YY or M/D/YYYY
+        r'^\d{1,2}-\d{1,2}-\d{2,4}$',  # M-D-YY or M-D-YYYY
+        r'^\d{1,2}\s+\w{3,9}\s+\d{2,4}$',  # 15 January 2024 or 15 Jan 24
+        r'^\w{3,9}\s+\d{1,2},?\s+\d{2,4}$',  # January 15, 2024 or Jan 15 2024
+        r'^\d{8}$',  # YYYYMMDD or MMDDYYYY
     ]
+    
+    # First check for datetime (must have time component)
+    datetime_match_count = 0
+    for v in non_empty:
+        if any(re.match(p, v, re.IGNORECASE) for p in datetime_patterns):
+            datetime_match_count += 1
+    if datetime_match_count > len(non_empty) * 0.7:
+        return ColumnType.DATETIME, None
+    
+    # Then check for date only
     date_match_count = 0
     for v in non_empty:
-        if any(re.match(p, v) for p in date_patterns):
+        if any(re.match(p, v, re.IGNORECASE) for p in date_patterns):
             date_match_count += 1
     if date_match_count > len(non_empty) * 0.7:  # 70% match date patterns
         return ColumnType.DATE, None
