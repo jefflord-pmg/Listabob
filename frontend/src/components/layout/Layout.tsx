@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './Sidebar';
+import { SystemModal } from '../ui';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -8,7 +10,9 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [systemModalOpen, setSystemModalOpen] = useState(false);
   const userToggledRef = useRef(false); // Track if user manually toggled
+  const { logout } = useAuth();
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
       return (localStorage.getItem('theme') as 'light' | 'dark') || 'light';
@@ -74,6 +78,14 @@ export function Layout({ children }: LayoutProps) {
         onClose={() => setSidebarOpen(false)}
         theme={theme}
         onToggleTheme={toggleTheme}
+        onOpenSystem={() => setSystemModalOpen(true)}
+      />
+      
+      {/* System Modal */}
+      <SystemModal 
+        isOpen={systemModalOpen} 
+        onClose={() => setSystemModalOpen(false)}
+        onLogout={logout}
       />
       
       {/* Main content */}
