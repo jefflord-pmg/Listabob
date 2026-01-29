@@ -5,6 +5,7 @@ import { useAddColumn, useDeleteColumn, useUpdateColumn, useReorderColumns, useU
 import { AddColumnModal, EditColumnModal } from '../columns';
 import { DateCell, ChoiceCell, BooleanCell, CurrencyCell, HyperlinkCell } from '../cells';
 import { ConfirmModal } from '../ui';
+import { FilterPanel } from './FilterPanel';
 
 interface GridViewProps {
   listId: string;
@@ -29,6 +30,8 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
   const [editValue, setEditValue] = useState('');
   const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
   const [editingColumn, setEditingColumn] = useState<Column | null>(null);
+  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
+  const [filters, setFilters] = useState<Record<string, Set<string>>>({});
   
   // Get default view and its sort config
   const defaultView = views.find(v => v.is_default) || views[0];
@@ -47,14 +50,62 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
     onConfirm: () => void;
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
-  // Sorted items based on URL params
+  // Filter items based on active filters
+  const filteredItems = useMemo(() => {
+    if (Object.keys(filters).length === 0) return items;
+    
+    return items.filter(item => {
+      // Check all active filters - item must match ALL column filters
+      for (const [columnId, filterValues] of Object.entries(filters)) {
+        if (filterValues.size === 0) continue;
+        
+        const column = columns.find(c => c.id === columnId);
+        if (!column) continue;
+        
+        const itemValue = item.values[columnId];
+        const isEmpty = itemValue === null || itemValue === undefined || itemValue === '';
+        
+        // Check if filtering for empty
+        if (filterValues.has('__empty__') && isEmpty) {
+          continue; // Matches empty filter
+        }
+        
+        if (isEmpty) {
+          return false; // Item is empty but not filtering for empty
+        }
+        
+        // Handle different column types
+        if (column.column_type === 'multiple_choice' && typeof itemValue === 'string') {
+          // For multiple choice, match if ANY of the item's values match ANY filter value
+          const itemValues = itemValue.split(',').map(v => v.trim());
+          const hasMatch = itemValues.some(v => filterValues.has(v));
+          if (!hasMatch && !filterValues.has('__empty__')) {
+            return false;
+          }
+        } else if (column.column_type === 'boolean') {
+          const boolStr = itemValue ? 'Yes' : 'No';
+          if (!filterValues.has(boolStr)) {
+            return false;
+          }
+        } else {
+          // For other types, exact match
+          if (!filterValues.has(String(itemValue))) {
+            return false;
+          }
+        }
+      }
+      return true;
+    });
+  }, [items, filters, columns]);
+
+  // Sorted items based on view config
   const sortedItems = useMemo(() => {
-    if (!sortColumnId || !sortDirection) return items;
+    if (!sortColumnId || !sortDirection) return filteredItems;
     
     const column = columns.find(c => c.id === sortColumnId);
-    if (!column) return items;
+    if (!column) return filteredItems;
     
-    return [...items].sort((a, b) => {
+    return [...filteredItems].sort((a, b) => {
       const aVal = a.values[sortColumnId];
       const bVal = b.values[sortColumnId];
       
@@ -76,7 +127,7 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
       
       return sortDirection === 'desc' ? -comparison : comparison;
     });
-  }, [items, sortColumnId, sortDirection, columns]);
+  }, [filteredItems, sortColumnId, sortDirection, columns]);
 
   const handleSort = (columnId: string) => {
     if (!defaultView) return;
@@ -368,55 +419,80 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
     }
   };
 
+  const hasActiveFilters = Object.keys(filters).length > 0;
+
   return (
-    <div className="overflow-x-auto">
-      <table className="table table-sm">
-        <thead>
-          <tr>
-            {columns.map((column) => (
-              <th 
-                key={column.id} 
-                className={`bg-base-200 cursor-move select-none ${
-                  dragOverColumnId === column.id ? 'bg-primary/20 border-l-2 border-primary' : ''
-                } ${draggedColumnId === column.id ? 'opacity-50' : ''}`}
-                draggable
-                onDragStart={(e) => handleColumnDragStart(e, column.id)}
-                onDragOver={(e) => handleColumnDragOver(e, column.id)}
-                onDragLeave={handleColumnDragLeave}
-                onDrop={(e) => handleColumnDrop(e, column.id)}
-                onDragEnd={handleColumnDragEnd}
-              >
-                <div className="flex items-center gap-1">
-                  <span className="cursor-move text-base-content/30 mr-1">⠿</span>
-                  <span 
-                    className="cursor-pointer hover:text-primary flex-1"
-                    onClick={() => handleSort(column.id)}
-                  >
-                    {column.name}
-                    {getSortIcon(column.id)}
-                  </span>
-                  <button
-                    className="btn btn-ghost btn-xs opacity-50 hover:opacity-100 px-1"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingColumn(column);
-                    }}
-                    title="Edit column"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </button>
-                  {column.is_required && <span className="text-error ml-1">*</span>}
-                </div>
-              </th>
-            ))}
-            <th className="bg-base-200 w-24">
-              <button
-                className="btn btn-ghost btn-xs"
-                onClick={() => setIsAddColumnOpen(true)}
-                title="Add column"
+    <div className="flex h-full">
+      {/* Main content */}
+      <div className="flex-1 overflow-x-auto">
+        {/* Toolbar */}
+        <div className="flex items-center gap-2 mb-2 px-1">
+          <button
+            className={`btn btn-sm ${hasActiveFilters ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+            Filter
+            {hasActiveFilters && (
+              <span className="badge badge-sm">{Object.values(filters).reduce((sum, s) => sum + s.size, 0)}</span>
+            )}
+          </button>
+          {hasActiveFilters && (
+            <span className="text-sm text-base-content/60">
+              {sortedItems.length} of {items.length} items
+            </span>
+          )}
+        </div>
+
+        <table className="table table-sm">
+          <thead>
+            <tr>
+              {columns.map((column) => (
+                <th 
+                  key={column.id} 
+                  className={`bg-base-200 cursor-move select-none ${
+                    dragOverColumnId === column.id ? 'bg-primary/20 border-l-2 border-primary' : ''
+                  } ${draggedColumnId === column.id ? 'opacity-50' : ''}`}
+                  draggable
+                  onDragStart={(e) => handleColumnDragStart(e, column.id)}
+                  onDragOver={(e) => handleColumnDragOver(e, column.id)}
+                  onDragLeave={handleColumnDragLeave}
+                  onDrop={(e) => handleColumnDrop(e, column.id)}
+                  onDragEnd={handleColumnDragEnd}
+                >
+                  <div className="flex items-center gap-1">
+                    <span className="cursor-move text-base-content/30 mr-1">⠿</span>
+                    <span 
+                      className="cursor-pointer hover:text-primary flex-1"
+                      onClick={() => handleSort(column.id)}
+                    >
+                      {column.name}
+                      {getSortIcon(column.id)}
+                    </span>
+                    <button
+                      className="btn btn-ghost btn-xs opacity-50 hover:opacity-100 px-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingColumn(column);
+                      }}
+                      title="Edit column"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </button>
+                    {column.is_required && <span className="text-error ml-1">*</span>}
+                  </div>
+                </th>
+              ))}
+              <th className="bg-base-200 w-24">
+                <button
+                  className="btn btn-ghost btn-xs"
+                  onClick={() => setIsAddColumnOpen(true)}
+                  title="Add column"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -480,6 +556,20 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal(m => ({ ...m, isOpen: false }))}
       />
+      </div>
+
+      {/* Filter Panel */}
+      {isFilterPanelOpen && (
+        <FilterPanel
+          columns={columns}
+          items={items}
+          filters={filters}
+          onFiltersChange={setFilters}
+          onClose={() => setIsFilterPanelOpen(false)}
+          filteredCount={sortedItems.length}
+          totalCount={items.length}
+        />
+      )}
     </div>
   );
 }
