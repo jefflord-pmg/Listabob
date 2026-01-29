@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from pathlib import Path
 import json
-import shutil
+import sqlite3
 from datetime import datetime
 
 from app.database import SessionLocal
@@ -15,6 +15,20 @@ DATA_DIR = Path(__file__).parent.parent.parent / "data"
 DB_PATH = DATA_DIR / "listabob.db"
 
 
+def get_config():
+    """Read config file."""
+    if not CONFIG_PATH.exists():
+        return {}
+    with open(CONFIG_PATH, "r") as f:
+        return json.load(f)
+
+
+def save_config(config: dict):
+    """Save config file."""
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(config, f, indent=2)
+
+
 class StatsResponse(BaseModel):
     total_lists: int
     total_items: int
@@ -22,6 +36,14 @@ class StatsResponse(BaseModel):
     total_views: int
     total_values: int
     database_size_mb: float
+
+
+class ConfigResponse(BaseModel):
+    backup_path: str | None = None
+
+
+class UpdateConfigRequest(BaseModel):
+    backup_path: str | None = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -37,6 +59,27 @@ class BackupResponse(BaseModel):
     success: bool
     message: str
     backup_file: str | None = None
+
+
+@router.get("/config", response_model=ConfigResponse)
+def get_system_config():
+    """Get system configuration (non-sensitive fields only)."""
+    config = get_config()
+    return ConfigResponse(
+        backup_path=config.get("backup_path")
+    )
+
+
+@router.put("/config")
+def update_system_config(request: UpdateConfigRequest):
+    """Update system configuration."""
+    config = get_config()
+    
+    if request.backup_path is not None:
+        config["backup_path"] = request.backup_path
+    
+    save_config(config)
+    return {"success": True}
 
 
 @router.get("/stats", response_model=StatsResponse)
@@ -72,8 +115,7 @@ def change_password(request: ChangePasswordRequest):
     if not CONFIG_PATH.exists():
         raise HTTPException(status_code=500, detail="Config file not found")
     
-    with open(CONFIG_PATH, "r") as f:
-        config = json.load(f)
+    config = get_config()
     
     # Verify current password
     if config.get("password") != request.current_password:
@@ -83,8 +125,7 @@ def change_password(request: ChangePasswordRequest):
     config["password"] = request.new_password
     config["revoke_timestamp"] = datetime.utcnow().isoformat()
     
-    with open(CONFIG_PATH, "w") as f:
-        json.dump(config, f, indent=2)
+    save_config(config)
     
     return {"success": True, "message": "Password changed successfully. Please log in again."}
 
@@ -93,6 +134,11 @@ def change_password(request: ChangePasswordRequest):
 def backup_database(request: BackupRequest):
     """Backup the database to the specified path."""
     backup_dir = Path(request.backup_path)
+    
+    # Save the backup path to config
+    config = get_config()
+    config["backup_path"] = request.backup_path
+    save_config(config)
     
     # Validate backup path
     if not backup_dir.exists():
@@ -107,14 +153,20 @@ def backup_database(request: BackupRequest):
     # Create backup filename with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_filename = f"listabob_backup_{timestamp}.db"
-    backup_path = backup_dir / backup_filename
+    backup_file_path = backup_dir / backup_filename
     
     try:
-        shutil.copy2(DB_PATH, backup_path)
+        # Use SQLite's safe backup API
+        source_conn = sqlite3.connect(str(DB_PATH))
+        dest_conn = sqlite3.connect(str(backup_file_path))
+        source_conn.backup(dest_conn)
+        dest_conn.close()
+        source_conn.close()
+        
         return BackupResponse(
             success=True,
             message=f"Database backed up successfully",
-            backup_file=str(backup_path)
+            backup_file=str(backup_file_path)
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Backup failed: {str(e)}")

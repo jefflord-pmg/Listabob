@@ -35,9 +35,7 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
   useEffect(() => {
     if (isOpen) {
       fetchStats();
-      // Load saved backup path from localStorage
-      const savedPath = localStorage.getItem('listabob_backup_path');
-      if (savedPath) setBackupPath(savedPath);
+      fetchConfig();
     }
   }, [isOpen]);
 
@@ -53,6 +51,18 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
       console.error('Failed to fetch stats:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchConfig = async () => {
+    try {
+      const response = await fetch('/api/system/config');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.backup_path) setBackupPath(data.backup_path);
+      }
+    } catch (err) {
+      console.error('Failed to fetch config:', err);
     }
   };
 
@@ -115,9 +125,6 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
       setError('Please specify a backup path');
       return;
     }
-    
-    // Save path for next time
-    localStorage.setItem('listabob_backup_path', backupPath);
     
     setBackingUp(true);
     try {

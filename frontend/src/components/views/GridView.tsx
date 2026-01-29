@@ -634,9 +634,25 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
             </button>
           )}
           
-          <span className="text-sm text-base-content/60 ml-auto">
-            {hasActiveFilters ? `${sortedItems.length} of ${items.length}` : items.length} item{items.length !== 1 ? 's' : ''}
-          </span>
+          <div className="flex items-center gap-2 ml-auto">
+            <span className="text-sm text-base-content/60">
+              {hasActiveFilters ? `${sortedItems.length} of ${items.length}` : items.length} item{items.length !== 1 ? 's' : ''}
+            </span>
+            <button
+              onClick={handleAddRow}
+              className="btn btn-xs btn-circle btn-primary"
+              title="Add new row"
+              disabled={createItem.isPending}
+            >
+              {createItem.isPending ? (
+                <span className="loading loading-spinner loading-xs"></span>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Table container with scroll */}

@@ -1,4 +1,5 @@
 {
   "password": "change-this-password",
-  "revoke_timestamp": "2026-01-01T00:00:00Z"
+  "revoke_timestamp": "2026-01-01T00:00:00Z",
+  "backup_path": ""
 }
