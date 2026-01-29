@@ -143,7 +143,7 @@ export function FilterPanel({
   };
 
   return (
-    <div className="w-72 bg-base-100 border-l border-base-300 h-full flex flex-col">
+    <div className="w-72 bg-base-100 border-l border-base-300 h-full flex flex-col shrink-0">
       {/* Header */}
       <div className="p-4 border-b border-base-300 flex items-center justify-between">
         <div>

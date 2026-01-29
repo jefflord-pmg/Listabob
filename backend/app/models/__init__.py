@@ -16,6 +16,7 @@ class List(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     icon: Mapped[str | None] = mapped_column(String(50))
+    color: Mapped[str | None] = mapped_column(String(20))
     is_favorite: Mapped[bool] = mapped_column(Boolean, default=False)
     template_id: Mapped[str | None] = mapped_column(String(36))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

@@ -77,3 +77,6 @@ htmlcov/
 *.bak
 *.tmp
 *.temp
+
+# Config (contains password)
+config.json

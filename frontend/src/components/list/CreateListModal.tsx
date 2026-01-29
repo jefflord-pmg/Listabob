@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useCreateList } from '../../hooks/useLists';
 import { Modal } from '../ui/Modal';
+import { ColorIconPicker } from './ColorIconPicker';
 import type { ColumnType } from '../../types';
 
 interface CreateListModalProps {
@@ -15,6 +16,8 @@ const defaultColumns: { name: string; column_type: ColumnType }[] = [
 export function CreateListModal({ isOpen, onClose }: CreateListModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [icon, setIcon] = useState<string | null>('📋');
+  const [color, setColor] = useState<string | null>(null);
   const createList = useCreateList();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -25,10 +28,14 @@ export function CreateListModal({ isOpen, onClose }: CreateListModalProps) {
       await createList.mutateAsync({
         name: name.trim(),
         description: description.trim() || undefined,
+        icon: icon || undefined,
+        color: color || undefined,
         columns: defaultColumns,
       });
       setName('');
       setDescription('');
+      setIcon('📋');
+      setColor(null);
       onClose();
     } catch (error) {
       console.error('Failed to create list:', error);
@@ -38,6 +45,8 @@ export function CreateListModal({ isOpen, onClose }: CreateListModalProps) {
   const handleClose = () => {
     setName('');
     setDescription('');
+    setIcon('📋');
+    setColor(null);
     onClose();
   };
 
@@ -70,6 +79,14 @@ export function CreateListModal({ isOpen, onClose }: CreateListModalProps) {
             rows={2}
           />
         </div>
+        
+        <ColorIconPicker
+          selectedColor={color}
+          selectedIcon={icon}
+          onColorChange={setColor}
+          onIconChange={setIcon}
+        />
+        
         <div className="modal-action">
           <button type="button" className="btn" onClick={handleClose}>
             Cancel

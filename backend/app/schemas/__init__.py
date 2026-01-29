@@ -66,6 +66,7 @@ class ListBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
     icon: str | None = None
+    color: str | None = None
 
 
 class ListCreate(ListBase):
@@ -76,6 +77,7 @@ class ListUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     icon: str | None = None
+    color: str | None = None
     is_favorite: bool | None = None
 
 

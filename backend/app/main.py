@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import engine, Base
-from app.api import lists, items, views, templates, imports, exports
+from app.api import lists, items, views, templates, imports, exports, auth
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -23,6 +23,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(auth.router, prefix="/api")
 app.include_router(lists.router, prefix="/api")
 app.include_router(items.router, prefix="/api")
 app.include_router(views.router, prefix="/api")

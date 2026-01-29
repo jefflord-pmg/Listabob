@@ -5,6 +5,7 @@ import { useItems } from '../hooks/useItems';
 import { GridView } from '../components/views';
 import { useNavigate } from 'react-router-dom';
 import { ConfirmModal, Modal } from '../components/ui';
+import { ColorIconPicker } from '../components/list/ColorIconPicker';
 
 export function ListPage() {
   const { id } = useParams<{ id: string }>();
@@ -14,8 +15,10 @@ export function ListPage() {
   const updateList = useUpdateList();
   const deleteList = useDeleteList();
   
-  const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
-  const [newName, setNewName] = useState('');
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editIcon, setEditIcon] = useState<string | null>(null);
+  const [editColor, setEditColor] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   if (listLoading || itemsLoading) {
@@ -55,16 +58,30 @@ export function ListPage() {
     window.location.href = url;
   };
 
-  const openRenameModal = () => {
-    setNewName(list.name);
-    setIsRenameModalOpen(true);
+  const openEditModal = () => {
+    setEditName(list.name);
+    setEditIcon(list.icon);
+    setEditColor(list.color);
+    setIsEditModalOpen(true);
   };
 
-  const handleRename = () => {
-    if (newName.trim() && newName.trim() !== list.name) {
-      updateList.mutate({ id: list.id, name: newName.trim() });
+  const handleSaveEdit = () => {
+    const updates: { name?: string; icon?: string; color?: string } = {};
+    
+    if (editName.trim() && editName.trim() !== list.name) {
+      updates.name = editName.trim();
     }
-    setIsRenameModalOpen(false);
+    if (editIcon !== list.icon) {
+      updates.icon = editIcon || undefined;
+    }
+    if (editColor !== list.color) {
+      updates.color = editColor || undefined;
+    }
+    
+    if (Object.keys(updates).length > 0) {
+      updateList.mutate({ id: list.id, ...updates });
+    }
+    setIsEditModalOpen(false);
   };
 
   return (
@@ -77,7 +94,12 @@ export function ListPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
-          <span className="text-2xl">{list.icon || '📋'}</span>
+          <span 
+            className="text-2xl w-10 h-10 flex items-center justify-center rounded-lg"
+            style={list.color ? { backgroundColor: list.color } : undefined}
+          >
+            {list.icon || '📋'}
+          </span>
           <h1 className="text-xl font-bold flex-1">{list.name}</h1>
           <button
             className="btn btn-ghost btn-sm"
@@ -100,7 +122,7 @@ export function ListPage() {
               </svg>
             </label>
             <ul tabIndex={0} className="dropdown-content z-[100] menu p-2 shadow bg-base-200 rounded-box w-52">
-              <li><button onClick={openRenameModal}>Rename List</button></li>
+              <li><button onClick={openEditModal}>Edit List</button></li>
               <li className="divider"></li>
               <li className="menu-title"><span>Export CSV</span></li>
               <li><button onClick={() => handleExport(true)}>With Headers</button></li>
@@ -131,38 +153,42 @@ export function ListPage() {
         )}
       </div>
 
-      {/* Rename Modal */}
+      {/* Edit List Modal */}
       <Modal
-        isOpen={isRenameModalOpen}
-        onClose={() => setIsRenameModalOpen(false)}
-        title="Rename List"
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit List"
       >
-        <div className="form-control">
-          <label className="label" htmlFor="list-name">
-            <span className="label-text">List Name</span>
-          </label>
-          <input
-            id="list-name"
-            type="text"
-            className="input input-bordered"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && newName.trim()) {
-                handleRename();
-              }
-            }}
+        <div className="space-y-4">
+          <div className="form-control">
+            <label className="label" htmlFor="list-name">
+              <span className="label-text">List Name</span>
+            </label>
+            <input
+              id="list-name"
+              type="text"
+              className="input input-bordered"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              autoFocus
+            />
+          </div>
+          
+          <ColorIconPicker
+            selectedColor={editColor}
+            selectedIcon={editIcon}
+            onColorChange={setEditColor}
+            onIconChange={setEditIcon}
           />
         </div>
         <div className="modal-action">
-          <button className="btn btn-ghost" onClick={() => setIsRenameModalOpen(false)}>
+          <button className="btn btn-ghost" onClick={() => setIsEditModalOpen(false)}>
             Cancel
           </button>
           <button 
             className="btn btn-primary" 
-            onClick={handleRename}
-            disabled={!newName.trim()}
+            onClick={handleSaveEdit}
+            disabled={!editName.trim()}
           >
             Save
           </button>

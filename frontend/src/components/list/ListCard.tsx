@@ -24,7 +24,12 @@ export function ListCard({ list }: ListCardProps) {
       <div className="card-body p-4">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">{list.icon || '📋'}</span>
+            <span 
+              className="text-2xl w-10 h-10 flex items-center justify-center rounded-lg shrink-0"
+              style={list.color ? { backgroundColor: list.color } : undefined}
+            >
+              {list.icon || '📋'}
+            </span>
             <h3 className="card-title text-base">{list.name}</h3>
           </div>
           <button

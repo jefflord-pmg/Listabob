@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './Sidebar';
 
 interface LayoutProps {
@@ -8,6 +8,7 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const userToggledRef = useRef(false); // Track if user manually toggled
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
       return (localStorage.getItem('theme') as 'light' | 'dark') || 'light';
@@ -19,15 +20,24 @@ export function Layout({ children }: LayoutProps) {
   useEffect(() => {
     const checkMobile = () => {
       const mobile = window.innerWidth < 768;
+      const wasMobile = isMobile;
       setIsMobile(mobile);
-      if (mobile) setSidebarOpen(false);
-      else setSidebarOpen(true);
+      
+      // Only auto-adjust sidebar if user hasn't manually toggled on desktop
+      // Or if transitioning between mobile and desktop
+      if (mobile !== wasMobile) {
+        if (mobile) {
+          setSidebarOpen(false);
+        } else if (!userToggledRef.current) {
+          setSidebarOpen(true);
+        }
+      }
     };
     
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  }, [isMobile]);
 
   // Apply theme
   useEffect(() => {
@@ -40,6 +50,10 @@ export function Layout({ children }: LayoutProps) {
   };
 
   const toggleSidebar = () => {
+    // Mark that user has manually toggled (only matters on desktop)
+    if (!isMobile) {
+      userToggledRef.current = true;
+    }
     setSidebarOpen(prev => !prev);
   };
 

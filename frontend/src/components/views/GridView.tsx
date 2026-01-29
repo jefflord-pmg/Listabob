@@ -581,7 +581,13 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
                     <div className="flex justify-between items-center">
                       <button 
                         className={`flex-1 text-left ${activeViewId === filter.id ? 'font-bold' : ''}`}
-                        onClick={() => handleLoadFilter(filter.id)}
+                        onClick={(e) => {
+                          handleLoadFilter(filter.id);
+                          // Close dropdown unless Ctrl/Cmd is held (for quick preview)
+                          if (!e.ctrlKey && !e.metaKey) {
+                            (document.activeElement as HTMLElement)?.blur();
+                          }
+                        }}
                       >
                         {filter.name}
                       </button>

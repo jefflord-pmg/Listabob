@@ -56,6 +56,30 @@ A flexible list management web app for organizing data in customizable tables wi
 - Python 3.10+
 - Node.js 18+
 
+### Configuration
+
+Before starting, create a config file for authentication:
+
+```bash
+# Copy the example config
+cp config.example.json config.json
+
+# Edit config.json and set your password
+```
+
+**config.json format:**
+```json
+{
+  "password": "your-secure-password",
+  "revoke_timestamp": "2026-01-01T00:00:00Z"
+}
+```
+
+- `password`: The password required to access the app
+- `revoke_timestamp`: Change this timestamp to log out all currently authenticated users
+
+> **Note:** `config.json` is gitignored and will not be committed to the repository.
+
 ### Backend Setup
 
 ```bash

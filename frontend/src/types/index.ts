@@ -30,6 +30,7 @@ export interface List {
   name: string;
   description: string | null;
   icon: string | null;
+  color: string | null;
   is_favorite: boolean;
   created_at: string;
   updated_at: string;
@@ -42,6 +43,7 @@ export interface ListSummary {
   name: string;
   description: string | null;
   icon: string | null;
+  color: string | null;
   is_favorite: boolean;
   created_at: string;
   updated_at: string;
@@ -73,6 +75,7 @@ export interface CreateListPayload {
   name: string;
   description?: string;
   icon?: string;
+  color?: string;
   columns?: CreateColumnPayload[];
 }
 
