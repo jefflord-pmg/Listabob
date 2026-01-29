@@ -97,8 +97,30 @@ export function useReorderColumns() {
 export function useUpdateView() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ listId, viewId, config }: { listId: string; viewId: string; config: Record<string, unknown> }) =>
-      listsApi.updateView(listId, viewId, { config }),
+    mutationFn: ({ listId, viewId, config, name }: { listId: string; viewId: string; config?: Record<string, unknown>; name?: string }) =>
+      listsApi.updateView(listId, viewId, { config, name }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['list', variables.listId] });
+    },
+  });
+}
+
+export function useCreateView() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ listId, name, config }: { listId: string; name: string; config?: Record<string, unknown> }) =>
+      listsApi.createView(listId, { name, config }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['list', variables.listId] });
+    },
+  });
+}
+
+export function useDeleteView() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ listId, viewId }: { listId: string; viewId: string }) =>
+      listsApi.deleteView(listId, viewId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['list', variables.listId] });
     },

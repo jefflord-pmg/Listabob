@@ -1,10 +1,10 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import type { Column, Item, ColumnType, View } from '../../types';
 import { useCreateItem, useUpdateItem, useDeleteItem } from '../../hooks/useItems';
-import { useAddColumn, useDeleteColumn, useUpdateColumn, useReorderColumns, useUpdateView } from '../../hooks/useLists';
+import { useAddColumn, useDeleteColumn, useUpdateColumn, useReorderColumns, useUpdateView, useCreateView, useDeleteView } from '../../hooks/useLists';
 import { AddColumnModal, EditColumnModal } from '../columns';
 import { DateCell, ChoiceCell, BooleanCell, CurrencyCell, HyperlinkCell } from '../cells';
-import { ConfirmModal } from '../ui';
+import { ConfirmModal, Modal } from '../ui';
 import { FilterPanel } from './FilterPanel';
 
 interface GridViewProps {
@@ -25,6 +25,8 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
   const updateColumn = useUpdateColumn();
   const reorderColumns = useReorderColumns();
   const updateView = useUpdateView();
+  const createView = useCreateView();
+  const deleteView = useDeleteView();
   
   const [editingCell, setEditingCell] = useState<{ itemId: string; columnId: string } | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -32,11 +34,33 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
   const [editingColumn, setEditingColumn] = useState<Column | null>(null);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [filters, setFilters] = useState<Record<string, Set<string>>>({});
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  const [isSaveFilterModalOpen, setIsSaveFilterModalOpen] = useState(false);
+  const [newFilterName, setNewFilterName] = useState('');
   
-  // Get default view and its sort config
+  // Get saved filter views (non-default views with filters in config)
+  const savedFilters = views.filter(v => !v.is_default && v.config?.filters);
   const defaultView = views.find(v => v.is_default) || views[0];
-  const sortColumnId = (defaultView?.config?.sortBy as string) || null;
-  const sortDirection = (defaultView?.config?.sortDir as SortDirection) || null;
+  
+  // Get sort config from active view or default view
+  const activeView = activeViewId ? views.find(v => v.id === activeViewId) : defaultView;
+  const sortColumnId = (activeView?.config?.sortBy as string) || null;
+  const sortDirection = (activeView?.config?.sortDir as SortDirection) || null;
+  
+  // Load filters when active view changes
+  useEffect(() => {
+    if (activeViewId) {
+      const view = views.find(v => v.id === activeViewId);
+      if (view?.config?.filters) {
+        const savedFilters = view.config.filters as Record<string, string[]>;
+        const loadedFilters: Record<string, Set<string>> = {};
+        for (const [colId, values] of Object.entries(savedFilters)) {
+          loadedFilters[colId] = new Set(values);
+        }
+        setFilters(loadedFilters);
+      }
+    }
+  }, [activeViewId, views]);
   
   // Drag and drop state for columns
   const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
@@ -169,13 +193,67 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
       newSortDir = null;
     }
     
+    // Use the active view (or default) to save sort settings
+    const viewToUpdate = activeView || defaultView;
+    if (!viewToUpdate) return;
+    
     const newConfig = {
-      ...defaultView.config,
+      ...viewToUpdate.config,
       sortBy: newSortBy,
       sortDir: newSortDir,
     };
     
-    updateView.mutate({ listId, viewId: defaultView.id, config: newConfig });
+    updateView.mutate({ listId, viewId: viewToUpdate.id, config: newConfig });
+  };
+
+  // Convert filters to serializable format for saving
+  const serializeFilters = (f: Record<string, Set<string>>) => {
+    const result: Record<string, string[]> = {};
+    for (const [colId, values] of Object.entries(f)) {
+      if (values.size > 0) {
+        result[colId] = Array.from(values);
+      }
+    }
+    return result;
+  };
+
+  const handleSaveFilter = () => {
+    if (!newFilterName.trim()) return;
+    
+    const config = {
+      filters: serializeFilters(filters),
+      sortBy: sortColumnId,
+      sortDir: sortDirection,
+    };
+    
+    createView.mutate({ listId, name: newFilterName.trim(), config });
+    setIsSaveFilterModalOpen(false);
+    setNewFilterName('');
+  };
+
+  const handleLoadFilter = (viewId: string) => {
+    setActiveViewId(viewId);
+  };
+
+  const handleClearFilters = () => {
+    setFilters({});
+    setActiveViewId(null);
+  };
+
+  const handleDeleteFilter = (viewId: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Saved Filter',
+      message: 'Are you sure you want to delete this saved filter?',
+      onConfirm: () => {
+        deleteView.mutate({ listId, viewId });
+        if (activeViewId === viewId) {
+          setActiveViewId(null);
+          setFilters({});
+        }
+        setConfirmModal(m => ({ ...m, isOpen: false }));
+      },
+    });
   };
 
   const getSortIcon = (columnId: string) => {
@@ -466,14 +544,15 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
     }
   };
 
-  const hasActiveFilters = Object.keys(filters).length > 0;
+  const hasActiveFilters = Object.keys(filters).length > 0 && Object.values(filters).some(s => s.size > 0);
+  const activeFilterView = activeViewId ? views.find(v => v.id === activeViewId) : null;
 
   return (
     <div className="flex h-full">
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Toolbar */}
-        <div className="flex items-center gap-2 mb-2 px-1 flex-shrink-0">
+        <div className="flex items-center gap-2 mb-2 px-1 flex-shrink-0 flex-wrap">
           <button
             className={`btn btn-sm ${hasActiveFilters ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
@@ -486,7 +565,70 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
               <span className="badge badge-sm">{Object.values(filters).reduce((sum, s) => sum + s.size, 0)}</span>
             )}
           </button>
-          <span className="text-sm text-base-content/60">
+          
+          {/* Saved Filters Dropdown */}
+          {savedFilters.length > 0 && (
+            <div className="dropdown">
+              <label tabIndex={0} className="btn btn-sm btn-ghost">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                </svg>
+                Saved Filters
+              </label>
+              <ul tabIndex={0} className="dropdown-content z-[50] menu p-2 shadow-lg bg-base-100 rounded-box w-56">
+                {savedFilters.map(filter => (
+                  <li key={filter.id}>
+                    <div className="flex justify-between items-center">
+                      <button 
+                        className={`flex-1 text-left ${activeViewId === filter.id ? 'font-bold' : ''}`}
+                        onClick={() => handleLoadFilter(filter.id)}
+                      >
+                        {filter.name}
+                      </button>
+                      <button 
+                        className="btn btn-ghost btn-xs text-error"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteFilter(filter.id);
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {/* Save Current Filter */}
+          {hasActiveFilters && !activeFilterView && (
+            <button 
+              className="btn btn-sm btn-ghost"
+              onClick={() => setIsSaveFilterModalOpen(true)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+              </svg>
+              Save Filter
+            </button>
+          )}
+          
+          {/* Active filter indicator and clear */}
+          {activeFilterView && (
+            <span className="badge badge-primary gap-1">
+              {activeFilterView.name}
+              <button onClick={handleClearFilters} className="hover:text-primary-content">✕</button>
+            </span>
+          )}
+          
+          {hasActiveFilters && !activeFilterView && (
+            <button className="btn btn-sm btn-ghost text-error" onClick={handleClearFilters}>
+              Clear
+            </button>
+          )}
+          
+          <span className="text-sm text-base-content/60 ml-auto">
             {hasActiveFilters ? `${sortedItems.length} of ${items.length}` : items.length} item{items.length !== 1 ? 's' : ''}
           </span>
         </div>
@@ -616,12 +758,63 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
           columns={columns}
           items={items}
           filters={filters}
-          onFiltersChange={setFilters}
+          onFiltersChange={(newFilters) => {
+            setFilters(newFilters);
+            // Clear active view when manually changing filters
+            if (activeViewId) {
+              setActiveViewId(null);
+            }
+          }}
           onClose={() => setIsFilterPanelOpen(false)}
           filteredCount={sortedItems.length}
           totalCount={items.length}
         />
       )}
+
+      {/* Save Filter Modal */}
+      <Modal
+        isOpen={isSaveFilterModalOpen}
+        onClose={() => {
+          setIsSaveFilterModalOpen(false);
+          setNewFilterName('');
+        }}
+        title="Save Filter"
+      >
+        <div className="form-control">
+          <label className="label" htmlFor="filter-name">
+            <span className="label-text">Filter Name</span>
+          </label>
+          <input
+            id="filter-name"
+            type="text"
+            className="input input-bordered"
+            value={newFilterName}
+            onChange={(e) => setNewFilterName(e.target.value)}
+            placeholder="e.g., Unwatched Shows"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newFilterName.trim()) {
+                handleSaveFilter();
+              }
+            }}
+          />
+        </div>
+        <div className="modal-action">
+          <button className="btn btn-ghost" onClick={() => {
+            setIsSaveFilterModalOpen(false);
+            setNewFilterName('');
+          }}>
+            Cancel
+          </button>
+          <button 
+            className="btn btn-primary" 
+            onClick={handleSaveFilter}
+            disabled={!newFilterName.trim()}
+          >
+            Save
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

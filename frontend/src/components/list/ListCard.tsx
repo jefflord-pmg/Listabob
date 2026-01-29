@@ -47,7 +47,7 @@ export function ListCard({ list }: ListCardProps) {
           <p className="text-sm text-base-content/70 line-clamp-2">{list.description}</p>
         )}
         <div className="text-xs text-base-content/50 mt-2">
-          Updated {formatDistanceToNow(new Date(list.updated_at), { addSuffix: true })}
+          Updated {formatDistanceToNow(new Date(list.updated_at + 'Z'), { addSuffix: true })}
         </div>
       </div>
     </Link>

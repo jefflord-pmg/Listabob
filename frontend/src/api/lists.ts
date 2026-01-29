@@ -47,8 +47,17 @@ export const listsApi = {
   },
 
   // View operations
-  updateView: async (listId: string, viewId: string, payload: { config?: Record<string, unknown> }): Promise<View> => {
+  createView: async (listId: string, payload: { name: string; view_type?: string; config?: Record<string, unknown> }): Promise<View> => {
+    const { data } = await api.post(`/lists/${listId}/views`, { view_type: 'grid', ...payload });
+    return data;
+  },
+
+  updateView: async (listId: string, viewId: string, payload: { name?: string; config?: Record<string, unknown> }): Promise<View> => {
     const { data } = await api.put(`/lists/${listId}/views/${viewId}`, payload);
     return data;
+  },
+
+  deleteView: async (listId: string, viewId: string): Promise<void> => {
+    await api.delete(`/lists/${listId}/views/${viewId}`);
   },
 };
