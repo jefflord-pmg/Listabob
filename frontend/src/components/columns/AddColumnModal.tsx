@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Modal } from '../ui/Modal';
 import type { ColumnType } from '../../types';
 
 interface AddColumnModalProps {
@@ -47,6 +48,13 @@ export function AddColumnModal({ isOpen, onClose, onAdd }: AddColumnModalProps) 
     onClose();
   };
 
+  const handleClose = () => {
+    setName('');
+    setColumnType('text');
+    setChoices(['']);
+    onClose();
+  };
+
   const addChoice = () => {
     setChoices([...choices, '']);
   };
@@ -63,104 +71,99 @@ export function AddColumnModal({ isOpen, onClose, onAdd }: AddColumnModalProps) 
     }
   };
 
-  if (!isOpen) return null;
-
   const needsChoices = columnType === 'choice' || columnType === 'multiple_choice';
 
   return (
-    <dialog className="modal modal-open">
-      <div className="modal-box">
-        <h3 className="font-bold text-lg">Add Column</h3>
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          {/* Column Name */}
-          <div className="form-control">
-            <label className="label">
-              <span className="label-text">Column Name</span>
-            </label>
-            <input
-              type="text"
-              placeholder="e.g., Status, Due Date, Priority"
-              className="input input-bordered w-full"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoFocus
-            />
-          </div>
+    <Modal isOpen={isOpen} onClose={handleClose} title="Add Column">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Column Name */}
+        <div className="form-control">
+          <label className="label" htmlFor="column-name">
+            <span className="label-text">Column Name</span>
+          </label>
+          <input
+            id="column-name"
+            type="text"
+            placeholder="e.g., Status, Due Date, Priority"
+            className="input input-bordered w-full"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
 
-          {/* Column Type */}
+        {/* Column Type */}
+        <div className="form-control">
+          <label className="label" htmlFor="column-type">
+            <span className="label-text">Column Type</span>
+          </label>
+          <select
+            id="column-type"
+            className="select select-bordered w-full"
+            value={columnType}
+            onChange={(e) => setColumnType(e.target.value as ColumnType)}
+          >
+            {COLUMN_TYPES.map((type) => (
+              <option key={type.value} value={type.value}>
+                {type.label} - {type.description}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Choice Options (for choice/multiple_choice types) */}
+        {needsChoices && (
           <div className="form-control">
             <label className="label">
-              <span className="label-text">Column Type</span>
+              <span className="label-text">Options</span>
             </label>
-            <select
-              className="select select-bordered w-full"
-              value={columnType}
-              onChange={(e) => setColumnType(e.target.value as ColumnType)}
-            >
-              {COLUMN_TYPES.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label} - {type.description}
-                </option>
+            <div className="space-y-2">
+              {choices.map((choice, index) => (
+                <div key={index} className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder={`Option ${index + 1}`}
+                    className="input input-bordered input-sm flex-1"
+                    value={choice}
+                    onChange={(e) => updateChoice(index, e.target.value)}
+                    aria-label={`Option ${index + 1}`}
+                  />
+                  {choices.length > 1 && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm btn-square"
+                      onClick={() => removeChoice(index)}
+                      aria-label={`Remove option ${index + 1}`}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
               ))}
-            </select>
-          </div>
-
-          {/* Choice Options (for choice/multiple_choice types) */}
-          {needsChoices && (
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text">Options</span>
-              </label>
-              <div className="space-y-2">
-                {choices.map((choice, index) => (
-                  <div key={index} className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder={`Option ${index + 1}`}
-                      className="input input-bordered input-sm flex-1"
-                      value={choice}
-                      onChange={(e) => updateChoice(index, e.target.value)}
-                    />
-                    {choices.length > 1 && (
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm btn-square"
-                        onClick={() => removeChoice(index)}
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={addChoice}
-                >
-                  + Add option
-                </button>
-              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={addChoice}
+              >
+                + Add option
+              </button>
             </div>
-          )}
-
-          {/* Actions */}
-          <div className="modal-action">
-            <button type="button" className="btn" onClick={onClose}>
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={!name.trim()}
-            >
-              Add Column
-            </button>
           </div>
-        </form>
-      </div>
-      <form method="dialog" className="modal-backdrop">
-        <button onClick={onClose}>close</button>
+        )}
+
+        {/* Actions */}
+        <div className="modal-action">
+          <button type="button" className="btn" onClick={handleClose}>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={!name.trim()}
+          >
+            Add Column
+          </button>
+        </div>
       </form>
-    </dialog>
+    </Modal>
   );
 }

@@ -42,6 +42,11 @@ export function ListPage() {
     updateList.mutate({ id: list.id, is_favorite: !list.is_favorite });
   };
 
+  const handleExport = (includeHeader: boolean) => {
+    const url = `/api/export/csv/${list.id}?include_header=${includeHeader}`;
+    window.location.href = url;
+  };
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -75,6 +80,10 @@ export function ListPage() {
               </svg>
             </label>
             <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-200 rounded-box w-52">
+              <li className="menu-title"><span>Export CSV</span></li>
+              <li><button onClick={() => handleExport(true)}>With Headers</button></li>
+              <li><button onClick={() => handleExport(false)}>Without Headers</button></li>
+              <li className="divider"></li>
               <li><button onClick={handleDelete} className="text-error">Delete List</button></li>
             </ul>
           </div>

@@ -42,6 +42,7 @@ class ColumnCreate(ColumnBase):
 
 class ColumnUpdate(BaseModel):
     name: str | None = None
+    column_type: ColumnType | None = None
     is_required: bool | None = None
     config: dict | None = None
 

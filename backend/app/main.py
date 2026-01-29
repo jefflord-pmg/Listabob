@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import engine, Base
-from app.api import lists, items, views, templates
+from app.api import lists, items, views, templates, imports, exports
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -27,6 +27,8 @@ app.include_router(lists.router, prefix="/api")
 app.include_router(items.router, prefix="/api")
 app.include_router(views.router, prefix="/api")
 app.include_router(templates.router, prefix="/api")
+app.include_router(imports.router, prefix="/api")
+app.include_router(exports.router, prefix="/api")
 
 
 @app.get("/")

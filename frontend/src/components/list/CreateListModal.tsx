@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useCreateList } from '../../hooks/useLists';
+import { Modal } from '../ui/Modal';
 import type { ColumnType } from '../../types';
 
 interface CreateListModalProps {
@@ -34,55 +35,54 @@ export function CreateListModal({ isOpen, onClose }: CreateListModalProps) {
     }
   };
 
-  if (!isOpen) return null;
+  const handleClose = () => {
+    setName('');
+    setDescription('');
+    onClose();
+  };
 
   return (
-    <dialog className="modal modal-open">
-      <div className="modal-box">
-        <h3 className="font-bold text-lg">Create New List</h3>
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <div className="form-control">
-            <label className="label">
-              <span className="label-text">Name</span>
-            </label>
-            <input
-              type="text"
-              placeholder="My List"
-              className="input input-bordered w-full"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoFocus
-            />
-          </div>
-          <div className="form-control">
-            <label className="label">
-              <span className="label-text">Description (optional)</span>
-            </label>
-            <textarea
-              placeholder="What is this list for?"
-              className="textarea textarea-bordered w-full"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-            />
-          </div>
-          <div className="modal-action">
-            <button type="button" className="btn" onClick={onClose}>
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={!name.trim() || createList.isPending}
-            >
-              {createList.isPending ? 'Creating...' : 'Create List'}
-            </button>
-          </div>
-        </form>
-      </div>
-      <form method="dialog" className="modal-backdrop">
-        <button onClick={onClose}>close</button>
+    <Modal isOpen={isOpen} onClose={handleClose} title="Create New List">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="form-control">
+          <label className="label" htmlFor="list-name">
+            <span className="label-text">Name</span>
+          </label>
+          <input
+            id="list-name"
+            type="text"
+            placeholder="My List"
+            className="input input-bordered w-full"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+        <div className="form-control">
+          <label className="label" htmlFor="list-description">
+            <span className="label-text">Description (optional)</span>
+          </label>
+          <textarea
+            id="list-description"
+            placeholder="What is this list for?"
+            className="textarea textarea-bordered w-full"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+          />
+        </div>
+        <div className="modal-action">
+          <button type="button" className="btn" onClick={handleClose}>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={!name.trim() || createList.isPending}
+          >
+            {createList.isPending ? 'Creating...' : 'Create List'}
+          </button>
+        </div>
       </form>
-    </dialog>
+    </Modal>
   );
 }

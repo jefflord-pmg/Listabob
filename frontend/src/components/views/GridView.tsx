@@ -223,7 +223,7 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
     deleteColumn.mutate({ listId, columnId });
   };
 
-  const handleSaveColumn = (columnId: string, updates: { name?: string; config?: Record<string, unknown> }) => {
+  const handleSaveColumn = (columnId: string, updates: { name?: string; column_type?: ColumnType; config?: Record<string, unknown> }) => {
     updateColumn.mutate({ listId, columnId, ...updates });
   };
 
@@ -543,6 +543,7 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
       <EditColumnModal
         isOpen={editingColumn !== null}
         column={editingColumn}
+        items={items}
         onClose={() => setEditingColumn(null)}
         onSave={handleSaveColumn}
         onDelete={handleDeleteColumn}

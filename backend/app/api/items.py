@@ -46,10 +46,14 @@ def extract_value(item_value: ItemValue, column_type: str) -> Any:
     elif column_type == "boolean":
         return item_value.value_boolean
     elif column_type in ("choice", "multiple_choice"):
-        # Choice values are stored as {"value": "..."}, extract the actual value
+        # Choice values may be stored as {"value": "..."} in value_json
+        # OR as plain text in value_text (e.g., after converting from text column)
         if item_value.value_json and isinstance(item_value.value_json, dict):
             return item_value.value_json.get("value")
-        return item_value.value_json
+        if item_value.value_json:
+            return item_value.value_json
+        # Fallback to value_text for converted columns
+        return item_value.value_text
     elif column_type in ("image", "attachment"):
         return item_value.value_json
     return item_value.value_text

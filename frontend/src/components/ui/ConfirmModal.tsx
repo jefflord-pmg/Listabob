@@ -1,3 +1,5 @@
+import { Modal } from './Modal';
+
 interface ConfirmModalProps {
   isOpen: boolean;
   title: string;
@@ -19,8 +21,6 @@ export function ConfirmModal({
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
-  if (!isOpen) return null;
-
   const confirmButtonClass = {
     error: 'btn-error',
     warning: 'btn-warning',
@@ -28,22 +28,16 @@ export function ConfirmModal({
   }[confirmStyle];
 
   return (
-    <dialog className="modal modal-open">
-      <div className="modal-box">
-        <h3 className="font-bold text-lg">{title}</h3>
-        <p className="py-4">{message}</p>
-        <div className="modal-action">
-          <button className="btn" onClick={onCancel}>
-            {cancelText}
-          </button>
-          <button className={`btn ${confirmButtonClass}`} onClick={onConfirm}>
-            {confirmText}
-          </button>
-        </div>
+    <Modal isOpen={isOpen} onClose={onCancel} title={title}>
+      <p className="py-4">{message}</p>
+      <div className="modal-action">
+        <button className="btn" onClick={onCancel}>
+          {cancelText}
+        </button>
+        <button className={`btn ${confirmButtonClass}`} onClick={onConfirm}>
+          {confirmText}
+        </button>
       </div>
-      <form method="dialog" className="modal-backdrop">
-        <button onClick={onCancel}>close</button>
-      </form>
-    </dialog>
+    </Modal>
   );
 }

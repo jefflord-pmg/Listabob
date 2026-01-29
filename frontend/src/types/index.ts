@@ -1,14 +1,3 @@
-export interface Column {
-  id: string;
-  list_id: string;
-  name: string;
-  column_type: ColumnType;
-  position: number;
-  is_required: boolean;
-  config: Record<string, unknown> | null;
-  created_at: string;
-}
-
 export type ColumnType =
   | 'text'
   | 'number'
@@ -24,6 +13,17 @@ export type ColumnType =
   | 'rating'
   | 'person'
   | 'location';
+
+export interface Column {
+  id: string;
+  list_id: string;
+  name: string;
+  column_type: ColumnType;
+  position: number;
+  is_required: boolean;
+  config: Record<string, unknown> | null;
+  created_at: string;
+}
 
 export interface List {
   id: string;
