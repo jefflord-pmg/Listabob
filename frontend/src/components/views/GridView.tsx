@@ -714,7 +714,7 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
           </tr>
         </thead>
         <tbody>
-          {sortedItems.map((item, index) => (
+          {sortedItems.map((item) => (
             <tr 
               key={item.id} 
               className={`hover ${newItemIds.has(item.id) ? 'bg-primary/10' : ''}`}

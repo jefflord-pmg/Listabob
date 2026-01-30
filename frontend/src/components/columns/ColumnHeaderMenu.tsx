@@ -1,13 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 
 interface ColumnHeaderMenuProps {
-  columnId: string;
   columnName: string;
   onRename: (newName: string) => void;
   onDelete: () => void;
 }
 
-export function ColumnHeaderMenu({ columnId, columnName, onRename, onDelete }: ColumnHeaderMenuProps) {
+export function ColumnHeaderMenu({ columnName, onRename, onDelete }: ColumnHeaderMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [newName, setNewName] = useState(columnName);

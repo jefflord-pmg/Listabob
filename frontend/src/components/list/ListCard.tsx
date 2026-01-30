@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import type { ListSummary } from '../../types';
 import { useUpdateList } from '../../hooks/useLists';
@@ -12,7 +12,6 @@ interface ListCardProps {
 
 export function ListCard({ list }: ListCardProps) {
   const updateList = useUpdateList();
-  const navigate = useNavigate();
   const [showMenu, setShowMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [editName, setEditName] = useState('');

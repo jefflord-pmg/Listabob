@@ -1,3 +1,4 @@
+import sys
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 import json
@@ -6,16 +7,29 @@ from pathlib import Path
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-CONFIG_PATH = Path(__file__).parent.parent.parent.parent / "config.json"
+
+def get_base_dir() -> Path:
+    """Get the base directory for config file."""
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).parent
+    return Path(__file__).parent.parent.parent.parent
+
+
+CONFIG_PATH = get_base_dir() / "config.json"
 
 
 def get_config():
     """Load config from file."""
     if not CONFIG_PATH.exists():
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Config file not found. Copy config.example.json to config.json"
-        )
+        # Create default config for standalone mode
+        default_config = {
+            "password": "listabob",
+            "revoke_timestamp": "2026-01-01T00:00:00Z",
+            "backup_path": ""
+        }
+        with open(CONFIG_PATH, 'w') as f:
+            json.dump(default_config, f, indent=2)
+        return default_config
     with open(CONFIG_PATH) as f:
         return json.load(f)
 

@@ -1,3 +1,5 @@
+import os
+import sys
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from pathlib import Path
@@ -7,11 +9,19 @@ from datetime import datetime
 
 from app.database import SessionLocal
 from app.models import List, Column, Item, ItemValue, View
+from app.config import DATA_DIR
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
-CONFIG_PATH = Path(__file__).parent.parent.parent.parent / "config.json"
-DATA_DIR = Path(__file__).parent.parent.parent / "data"
+
+def get_base_dir() -> Path:
+    """Get the base directory for config file."""
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).parent
+    return Path(__file__).parent.parent.parent.parent
+
+
+CONFIG_PATH = get_base_dir() / "config.json"
 DB_PATH = DATA_DIR / "listabob.db"
 
 
