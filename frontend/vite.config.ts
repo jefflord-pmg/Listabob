@@ -12,3 +12,6 @@ export default defineConfig({
     }
   }
 })
+
+// Note: The "@property" CSS warning from daisyUI is cosmetic - it's valid CSS
+// that lightningcss doesn't fully support yet. It doesn't affect the build.
