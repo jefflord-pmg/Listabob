@@ -115,9 +115,9 @@ export function ChoiceCell({ value, choices, onChange, multiple = false, autoFoc
     }
   };
 
-  const handleOpen = () => {
-    setIsOpen(!isOpen);
+  const openDropdown = () => {
     if (!isOpen) {
+      setIsOpen(true);
       setFilterText('');
       setFocusedIndex(-1);
     }
@@ -127,13 +127,13 @@ export function ChoiceCell({ value, choices, onChange, multiple = false, autoFoc
     <div ref={ref} className="relative">
       <div
         className="cursor-pointer min-h-[1.5rem] px-2 py-1 hover:bg-base-200 rounded flex flex-wrap gap-1"
-        onClick={handleOpen}
+        onClick={openDropdown}
         tabIndex={0}
-        onFocus={() => !isOpen && setIsOpen(true)}
+        onFocus={openDropdown}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            handleOpen();
+            openDropdown();
           }
         }}
       >
