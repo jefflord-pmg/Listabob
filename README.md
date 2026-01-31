@@ -186,6 +186,43 @@ Listabob/
 └── README.md
 ```
 
+## Building & Releases
+
+### Download Releases
+
+Pre-built releases are available at: https://github.com/jefflord-pmg/Listabob/releases
+
+### Building the Executable
+
+To package Listabob as a standalone Windows executable:
+
+```bash
+# From the project root directory
+build.bat
+```
+
+This will:
+1. Build the frontend with `npm run build`
+2. Install PyInstaller (if needed)
+3. Create the executable using the `listabob.spec` file
+
+Output will be in `dist\Listabob\`. The entire folder can be distributed.
+
+### Creating a New Release
+
+1. Build the executable with `build.bat`
+2. Archive the `dist\Listabob` folder (e.g., to `Listabob.7z`)
+3. Upload to GitHub releases:
+
+```bash
+gh release create "v1.0.0" Listabob.7z
+```
+
+For preview releases:
+```bash
+gh release create "preview-1" Listabob.7z
+```
+
 ## License
 
 MIT

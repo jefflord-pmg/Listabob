@@ -55,4 +55,4 @@ Use System Settings to configure automatic backups to a folder of your choice.
 
 ## Support
 
-Visit: https://github.com/yourusername/Listabob
+Visit: https://github.com/jefflord-pmg/Listabob
