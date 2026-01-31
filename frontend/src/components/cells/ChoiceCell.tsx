@@ -78,6 +78,10 @@ export function ChoiceCell({ value, choices, onChange, multiple = false, autoFoc
       } else {
         onChange([...current, choice].join(','));
       }
+      // Clear filter and refocus for quick multi-select
+      setFilterText('');
+      setFocusedIndex(-1);
+      inputRef.current?.focus();
     } else {
       onChange(choice);
       setIsOpen(false);
