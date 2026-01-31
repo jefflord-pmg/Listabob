@@ -3,11 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/jpeg" href="/lb-1.jpg" />
+    <link rel="apple-touch-icon" href="/lb-1.jpg" />
+    <link rel="manifest" href="/manifest.json" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#3b82f6" />
+    <meta name="description" content="A flexible list management app for organizing data in customizable tables" />
     <title>Listabob</title>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Register service worker for PWA
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').then(registration => {
+          // Check for updates on page load
+          registration.update();
+          
+          // Check for updates periodically (every 5 minutes)
+          setInterval(() => registration.update(), 5 * 60 * 1000);
+        });
+      }
+    </script>
   </body>
 </html>
