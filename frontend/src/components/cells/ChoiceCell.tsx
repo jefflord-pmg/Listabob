@@ -5,6 +5,7 @@ interface ChoiceCellProps {
   choices: string[];
   onChange: (value: string | null) => void;
   multiple?: boolean;
+  autoFocus?: boolean;
 }
 
 const CHOICE_COLORS = [
@@ -17,17 +18,20 @@ const CHOICE_COLORS = [
   'badge-error',
 ];
 
-export function ChoiceCell({ value, choices, onChange, multiple = false }: ChoiceCellProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function ChoiceCell({ value, choices, onChange, multiple = false, autoFocus = false }: ChoiceCellProps) {
+  const [isOpen, setIsOpen] = useState(autoFocus);
   const [filterText, setFilterText] = useState('');
+  const [focusedIndex, setFocusedIndex] = useState(-1);
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setIsOpen(false);
         setFilterText('');
+        setFocusedIndex(-1);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -38,8 +42,19 @@ export function ChoiceCell({ value, choices, onChange, multiple = false }: Choic
   useEffect(() => {
     if (isOpen && inputRef.current) {
       inputRef.current.focus();
+      setFocusedIndex(-1);
     }
   }, [isOpen]);
+
+  // Scroll focused item into view
+  useEffect(() => {
+    if (focusedIndex >= 0 && listRef.current) {
+      const buttons = listRef.current.querySelectorAll('button[data-choice]');
+      if (buttons[focusedIndex]) {
+        buttons[focusedIndex].scrollIntoView({ block: 'nearest' });
+      }
+    }
+  }, [focusedIndex]);
 
   const getColorClass = (choice: string) => {
     const index = choices.indexOf(choice);
@@ -67,6 +82,7 @@ export function ChoiceCell({ value, choices, onChange, multiple = false }: Choic
       onChange(choice);
       setIsOpen(false);
       setFilterText('');
+      setFocusedIndex(-1);
     }
   };
 
@@ -74,7 +90,20 @@ export function ChoiceCell({ value, choices, onChange, multiple = false }: Choic
     if (e.key === 'Escape') {
       setIsOpen(false);
       setFilterText('');
+      setFocusedIndex(-1);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setFocusedIndex(prev => 
+        prev < filteredChoices.length - 1 ? prev + 1 : prev
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setFocusedIndex(prev => prev > 0 ? prev - 1 : 0);
+    } else if ((e.key === 'Enter' || e.key === ' ') && focusedIndex >= 0 && focusedIndex < filteredChoices.length) {
+      e.preventDefault();
+      handleSelect(filteredChoices[focusedIndex]);
     } else if (e.key === 'Enter' && filteredChoices.length === 1) {
+      e.preventDefault();
       handleSelect(filteredChoices[0]);
     }
   };
@@ -83,6 +112,7 @@ export function ChoiceCell({ value, choices, onChange, multiple = false }: Choic
     setIsOpen(!isOpen);
     if (!isOpen) {
       setFilterText('');
+      setFocusedIndex(-1);
     }
   };
 
@@ -91,6 +121,14 @@ export function ChoiceCell({ value, choices, onChange, multiple = false }: Choic
       <div
         className="cursor-pointer min-h-[1.5rem] px-2 py-1 hover:bg-base-200 rounded flex flex-wrap gap-1"
         onClick={handleOpen}
+        tabIndex={0}
+        onFocus={() => !isOpen && setIsOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleOpen();
+          }
+        }}
       >
         {selectedValues.length > 0 ? (
           selectedValues.map((v) => (
@@ -112,19 +150,24 @@ export function ChoiceCell({ value, choices, onChange, multiple = false }: Choic
               className="input input-xs input-bordered w-full"
               placeholder="Type to filter..."
               value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
+              onChange={(e) => {
+                setFilterText(e.target.value);
+                setFocusedIndex(-1);
+              }}
               onKeyDown={handleKeyDown}
             />
           </div>
-          <div className="overflow-auto py-1">
+          <div ref={listRef} className="overflow-auto py-1">
             {filteredChoices.length > 0 ? (
-              filteredChoices.map((choice) => (
+              filteredChoices.map((choice, index) => (
                 <button
                   key={choice}
+                  data-choice={choice}
                   className={`w-full text-left px-3 py-1 hover:bg-base-300 text-sm flex items-center gap-2 ${
                     selectedValues.includes(choice) ? 'bg-base-300' : ''
-                  }`}
+                  } ${focusedIndex === index ? 'ring-2 ring-primary ring-inset' : ''}`}
                   onClick={() => handleSelect(choice)}
+                  onMouseEnter={() => setFocusedIndex(index)}
                 >
                   {multiple && (
                     <input
@@ -147,6 +190,7 @@ export function ChoiceCell({ value, choices, onChange, multiple = false }: Choic
                   onChange(null);
                   setIsOpen(false);
                   setFilterText('');
+                  setFocusedIndex(-1);
                 }}
               >
                 Clear
