@@ -4,8 +4,41 @@ from app.database import get_db
 from app.models import List, Item, ItemValue, Column
 from app.schemas import ItemCreate, ItemUpdate, ItemResponse
 from typing import Any
+from datetime import datetime, timedelta
+import re
 
 router = APIRouter(prefix="/lists/{list_id}/items", tags=["items"])
+
+
+def resolve_default_value(default_value: Any, column_type: str) -> Any:
+    """Resolve dynamic default values like 'today', 'now', '+3 days'."""
+    if default_value is None:
+        return None
+    
+    if column_type in ("date", "datetime"):
+        if isinstance(default_value, str):
+            lower_val = default_value.lower().strip()
+            
+            if lower_val == "today":
+                return datetime.now().date().isoformat()
+            elif lower_val == "now":
+                return datetime.now().isoformat()
+            
+            # Handle relative dates like "+3 days", "-1 week", "3 days from now"
+            match = re.match(r'^([+-]?\d+)\s*(day|days|week|weeks)(?:\s+from\s+now)?$', lower_val)
+            if match:
+                amount = int(match.group(1))
+                unit = match.group(2)
+                if unit.startswith('week'):
+                    delta = timedelta(weeks=amount)
+                else:
+                    delta = timedelta(days=amount)
+                result = datetime.now() + delta
+                if column_type == "date":
+                    return result.date().isoformat()
+                return result.isoformat()
+    
+    return default_value
 
 
 def get_value_for_column(value: Any, column_type: str) -> dict:
@@ -99,8 +132,8 @@ def create_item(list_id: str, data: ItemCreate, db: Session = Depends(get_db)):
     if not db_list:
         raise HTTPException(status_code=404, detail="List not found")
     
-    # Get column types
-    column_types = {col.id: col.column_type for col in db_list.columns}
+    # Get column info
+    column_info = {col.id: {'type': col.column_type, 'config': col.config or {}} for col in db_list.columns}
     
     # Get next position
     max_pos = db.query(Item).filter(Item.list_id == list_id).count()
@@ -110,12 +143,24 @@ def create_item(list_id: str, data: ItemCreate, db: Session = Depends(get_db)):
     db.add(item)
     db.flush()
     
+    # Merge provided values with defaults
+    values_to_create = dict(data.values)
+    
+    # Apply default values for columns not provided
+    for col in db_list.columns:
+        if col.id not in values_to_create:
+            default_value = (col.config or {}).get('default_value')
+            if default_value is not None:
+                resolved = resolve_default_value(default_value, col.column_type)
+                if resolved is not None:
+                    values_to_create[col.id] = resolved
+    
     # Create item values
-    for column_id, value in data.values.items():
-        if column_id not in column_types:
+    for column_id, value in values_to_create.items():
+        if column_id not in column_info:
             continue
         
-        col_type = column_types[column_id]
+        col_type = column_info[column_id]['type']
         value_fields = get_value_for_column(value, col_type)
         
         item_value = ItemValue(

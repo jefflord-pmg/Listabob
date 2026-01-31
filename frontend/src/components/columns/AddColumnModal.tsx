@@ -21,30 +21,59 @@ const COLUMN_TYPES: { value: ColumnType; label: string; description: string }[] 
   { value: 'hyperlink', label: 'Hyperlink', description: 'URL link' },
 ];
 
+const DATE_DEFAULT_OPTIONS = [
+  { value: '', label: 'No default' },
+  { value: 'today', label: 'Today' },
+  { value: 'now', label: 'Now (current time)' },
+  { value: '+1 days', label: 'Tomorrow' },
+  { value: '+7 days', label: 'In 1 week' },
+  { value: '+30 days', label: 'In 30 days' },
+];
+
 export function AddColumnModal({ isOpen, onClose, onAdd }: AddColumnModalProps) {
   const [name, setName] = useState('');
   const [columnType, setColumnType] = useState<ColumnType>('text');
   const [choices, setChoices] = useState<string[]>(['']);
+  const [defaultValue, setDefaultValue] = useState<string>('');
+  const [customDateDefault, setCustomDateDefault] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    let config: Record<string, unknown> | undefined;
+    const config: Record<string, unknown> = {};
     
     if (columnType === 'choice' || columnType === 'multiple_choice') {
       const validChoices = choices.filter(c => c.trim());
       if (validChoices.length > 0) {
-        config = { choices: validChoices };
+        config.choices = validChoices;
       }
+      if (defaultValue) {
+        config.default_value = defaultValue;
+      }
+    } else if (columnType === 'date' || columnType === 'datetime') {
+      const dateDefault = defaultValue === 'custom' ? customDateDefault : defaultValue;
+      if (dateDefault) {
+        config.default_value = dateDefault;
+      }
+    } else if (columnType === 'boolean') {
+      if (defaultValue === 'true' || defaultValue === 'false') {
+        config.default_value = defaultValue === 'true';
+      }
+    } else if (defaultValue) {
+      config.default_value = columnType === 'number' || columnType === 'currency' || columnType === 'rating'
+        ? parseFloat(defaultValue) || undefined
+        : defaultValue;
     }
 
-    onAdd(name.trim(), columnType, config);
+    onAdd(name.trim(), columnType, Object.keys(config).length > 0 ? config : undefined);
     
     // Reset form
     setName('');
     setColumnType('text');
     setChoices(['']);
+    setDefaultValue('');
+    setCustomDateDefault('');
     onClose();
   };
 
@@ -52,7 +81,15 @@ export function AddColumnModal({ isOpen, onClose, onAdd }: AddColumnModalProps) 
     setName('');
     setColumnType('text');
     setChoices(['']);
+    setDefaultValue('');
+    setCustomDateDefault('');
     onClose();
+  };
+
+  const handleTypeChange = (newType: ColumnType) => {
+    setColumnType(newType);
+    setDefaultValue('');
+    setCustomDateDefault('');
   };
 
   const addChoice = () => {
@@ -72,6 +109,123 @@ export function AddColumnModal({ isOpen, onClose, onAdd }: AddColumnModalProps) 
   };
 
   const needsChoices = columnType === 'choice' || columnType === 'multiple_choice';
+  const isDateType = columnType === 'date' || columnType === 'datetime';
+  const isBooleanType = columnType === 'boolean';
+  const isNumberType = columnType === 'number' || columnType === 'currency' || columnType === 'rating';
+  const isTextType = columnType === 'text' || columnType === 'hyperlink';
+
+  const renderDefaultValueInput = () => {
+    if (needsChoices) {
+      const validChoices = choices.filter(c => c.trim());
+      if (validChoices.length === 0) return null;
+      return (
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Default Value</span>
+          </label>
+          <select
+            className="select select-bordered select-sm w-full"
+            value={defaultValue}
+            onChange={(e) => setDefaultValue(e.target.value)}
+          >
+            <option value="">No default</option>
+            {validChoices.map((choice) => (
+              <option key={choice} value={choice}>{choice}</option>
+            ))}
+          </select>
+        </div>
+      );
+    }
+
+    if (isDateType) {
+      return (
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Default Value</span>
+          </label>
+          <select
+            className="select select-bordered select-sm w-full"
+            value={defaultValue}
+            onChange={(e) => setDefaultValue(e.target.value)}
+          >
+            {DATE_DEFAULT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+            <option value="custom">Custom (e.g., "+3 days")</option>
+          </select>
+          {defaultValue === 'custom' && (
+            <input
+              type="text"
+              className="input input-bordered input-sm w-full mt-2"
+              placeholder="e.g., +3 days, -1 week"
+              value={customDateDefault}
+              onChange={(e) => setCustomDateDefault(e.target.value)}
+            />
+          )}
+          <label className="label">
+            <span className="label-text-alt text-base-content/60">
+              Supports: today, now, +N days, +N weeks
+            </span>
+          </label>
+        </div>
+      );
+    }
+
+    if (isBooleanType) {
+      return (
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Default Value</span>
+          </label>
+          <select
+            className="select select-bordered select-sm w-full"
+            value={defaultValue}
+            onChange={(e) => setDefaultValue(e.target.value)}
+          >
+            <option value="">No default</option>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+      );
+    }
+
+    if (isNumberType) {
+      return (
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Default Value</span>
+          </label>
+          <input
+            type="number"
+            className="input input-bordered input-sm w-full"
+            placeholder="Enter default number"
+            value={defaultValue}
+            onChange={(e) => setDefaultValue(e.target.value)}
+          />
+        </div>
+      );
+    }
+
+    if (isTextType) {
+      return (
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Default Value</span>
+          </label>
+          <input
+            type="text"
+            className="input input-bordered input-sm w-full"
+            placeholder="Enter default text"
+            value={defaultValue}
+            onChange={(e) => setDefaultValue(e.target.value)}
+          />
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Add Column">
@@ -100,7 +254,7 @@ export function AddColumnModal({ isOpen, onClose, onAdd }: AddColumnModalProps) 
             id="column-type"
             className="select select-bordered w-full"
             value={columnType}
-            onChange={(e) => setColumnType(e.target.value as ColumnType)}
+            onChange={(e) => handleTypeChange(e.target.value as ColumnType)}
           >
             {COLUMN_TYPES.map((type) => (
               <option key={type.value} value={type.value}>
@@ -149,6 +303,9 @@ export function AddColumnModal({ isOpen, onClose, onAdd }: AddColumnModalProps) 
             </div>
           </div>
         )}
+
+        {/* Default Value */}
+        {renderDefaultValueInput()}
 
         {/* Actions */}
         <div className="modal-action">
