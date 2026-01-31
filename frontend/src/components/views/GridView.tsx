@@ -121,7 +121,7 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
     // Then apply column-specific filters
     if (Object.keys(filters).length === 0) return result;
     
-    return items.filter(item => {
+    return result.filter(item => {
       // Check all active filters - item must match ALL column filters
       for (const [columnId, filterValues] of Object.entries(filters)) {
         if (filterValues.size === 0) continue;
@@ -275,11 +275,13 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
 
   const handleLoadFilter = (viewId: string) => {
     setActiveViewId(viewId);
+    setSimpleFilter(''); // Clear search when loading a saved filter
   };
 
   const handleClearFilters = () => {
     setFilters({});
     setActiveViewId(null);
+    setSimpleFilter(''); // Clear search when clearing filters
   };
 
   const handleDeleteFilter = (viewId: string) => {
