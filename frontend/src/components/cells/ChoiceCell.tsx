@@ -88,9 +88,16 @@ export function ChoiceCell({ value, choices, onChange, multiple = false, autoFoc
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
+      e.preventDefault();
       setIsOpen(false);
       setFilterText('');
       setFocusedIndex(-1);
+    } else if (e.key === 'Tab') {
+      // Close dropdown and allow Tab to move to next element
+      setIsOpen(false);
+      setFilterText('');
+      setFocusedIndex(-1);
+      // Don't prevent default - let Tab naturally move focus
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       setFocusedIndex(prev => 
@@ -162,6 +169,7 @@ export function ChoiceCell({ value, choices, onChange, multiple = false, autoFoc
               filteredChoices.map((choice, index) => (
                 <button
                   key={choice}
+                  tabIndex={-1}
                   data-choice={choice}
                   className={`w-full text-left px-3 py-1 hover:bg-base-300 text-sm flex items-center gap-2 ${
                     selectedValues.includes(choice) ? 'bg-base-300' : ''
@@ -174,6 +182,7 @@ export function ChoiceCell({ value, choices, onChange, multiple = false, autoFoc
                       type="checkbox"
                       className="checkbox checkbox-xs"
                       checked={selectedValues.includes(choice)}
+                      tabIndex={-1}
                       readOnly
                     />
                   )}
@@ -185,6 +194,7 @@ export function ChoiceCell({ value, choices, onChange, multiple = false, autoFoc
             )}
             {value && !multiple && !filterText && (
               <button
+                tabIndex={-1}
                 className="w-full text-left px-3 py-1 hover:bg-base-300 text-sm text-base-content/50"
                 onClick={() => {
                   onChange(null);

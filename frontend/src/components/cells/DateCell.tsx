@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 interface DateCellProps {
   value: string | null;
@@ -8,6 +8,13 @@ interface DateCellProps {
 
 export function DateCell({ value, onChange, includeTime = false }: DateCellProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isEditing]);
 
   const parseDate = (dateStr: string | null): Date | null => {
     if (!dateStr) return null;
@@ -59,15 +66,22 @@ export function DateCell({ value, onChange, includeTime = false }: DateCellProps
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      setIsEditing(false);
+    }
+  };
+
   if (isEditing) {
     return (
       <input
+        ref={inputRef}
         type={includeTime ? 'datetime-local' : 'date'}
         className="input input-sm input-bordered w-full"
         value={formatForInput(value)}
         onChange={(e) => onChange(e.target.value || null)}
         onBlur={() => setIsEditing(false)}
-        autoFocus
+        onKeyDown={handleKeyDown}
       />
     );
   }
@@ -76,6 +90,14 @@ export function DateCell({ value, onChange, includeTime = false }: DateCellProps
     <div
       className="cursor-pointer min-h-[1.5rem] px-2 py-1 hover:bg-base-200 rounded"
       onClick={() => setIsEditing(true)}
+      tabIndex={0}
+      onFocus={() => setIsEditing(true)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setIsEditing(true);
+        }
+      }}
     >
       {formatDisplay(value) || <span className="text-base-content/30">Select date...</span>}
     </div>
