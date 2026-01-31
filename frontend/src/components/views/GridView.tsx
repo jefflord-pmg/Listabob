@@ -545,6 +545,8 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
         return (
           <div
             className="cursor-pointer min-h-[1.5rem] px-2 py-1 hover:bg-base-200 rounded"
+            tabIndex={0}
+            onFocus={() => startEditing(item.id, column.id, value)}
             onClick={() => startEditing(item.id, column.id, value)}
           >
             {value ? '⭐'.repeat(Math.min(Number(value), 5)) : <span className="text-base-content/30">Rate...</span>}
@@ -568,6 +570,8 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
         return (
           <div
             className="cursor-pointer min-h-[1.5rem] px-2 py-1 hover:bg-base-200 rounded"
+            tabIndex={0}
+            onFocus={() => startEditing(item.id, column.id, value)}
             onClick={() => startEditing(item.id, column.id, value)}
           >
             {value !== null && value !== undefined ? String(value) : ''}
@@ -591,6 +595,8 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
         return (
           <div
             className="cursor-pointer min-h-[1.5rem] px-2 py-1 hover:bg-base-200 rounded"
+            tabIndex={0}
+            onFocus={() => startEditing(item.id, column.id, value)}
             onClick={() => startEditing(item.id, column.id, value)}
           >
             {value !== null && value !== undefined ? String(value) : ''}
@@ -607,7 +613,7 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Toolbar */}
-        <div className="flex items-center gap-2 mb-2 px-1 flex-shrink-0 flex-wrap">
+        <div className="flex items-center gap-2 mb-2 px-1 pt-2 flex-shrink-0 flex-wrap">
           {/* Simple text filter */}
           <div className="relative">
             <input

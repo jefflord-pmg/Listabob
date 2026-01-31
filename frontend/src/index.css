@@ -2,3 +2,20 @@
 @plugin "daisyui" {
   themes: light --default, dark;
 }
+
+/* Focus glow effect for interactive elements */
+*:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 2px oklch(0.6 0.2 260 / 0.3), 0 0 8px 2px oklch(0.6 0.2 260 / 0.2) !important;
+}
+
+input:focus, select:focus, textarea:focus, [tabindex="0"]:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 2px oklch(0.6 0.2 260 / 0.3), 0 0 8px 2px oklch(0.6 0.2 260 / 0.2) !important;
+}
+
+/* Ensure DaisyUI inputs get the glow */
+.input:focus, .select:focus, .textarea:focus, .checkbox:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 2px oklch(0.6 0.2 260 / 0.3), 0 0 8px 2px oklch(0.6 0.2 260 / 0.2) !important;
+}

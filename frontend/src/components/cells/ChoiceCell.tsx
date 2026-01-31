@@ -86,18 +86,37 @@ export function ChoiceCell({ value, choices, onChange, multiple = false, autoFoc
     }
   };
 
+  const triggerRef = useRef<HTMLDivElement>(null);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.preventDefault();
       setIsOpen(false);
       setFilterText('');
       setFocusedIndex(-1);
+      // Return focus to trigger
+      triggerRef.current?.focus();
     } else if (e.key === 'Tab') {
-      // Close dropdown and allow Tab to move to next element
+      // Close dropdown and allow Tab/Shift+Tab to move focus
       setIsOpen(false);
       setFilterText('');
       setFocusedIndex(-1);
-      // Don't prevent default - let Tab naturally move focus
+      // For Shift+Tab, we need to focus the trigger first so Tab goes to previous element
+      if (e.shiftKey && triggerRef.current) {
+        e.preventDefault();
+        triggerRef.current.focus();
+        // Now programmatically move to previous focusable element
+        setTimeout(() => {
+          const focusables = Array.from(document.querySelectorAll<HTMLElement>(
+            'input:not([tabindex="-1"]), button:not([tabindex="-1"]), [tabindex="0"]'
+          )).filter(el => el.offsetParent !== null);
+          const currentIndex = focusables.indexOf(triggerRef.current!);
+          if (currentIndex > 0) {
+            focusables[currentIndex - 1].focus();
+          }
+        }, 0);
+      }
+      // Forward Tab: don't prevent default, let it naturally move
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       setFocusedIndex(prev => 
@@ -126,6 +145,7 @@ export function ChoiceCell({ value, choices, onChange, multiple = false, autoFoc
   return (
     <div ref={ref} className="relative">
       <div
+        ref={triggerRef}
         className="cursor-pointer min-h-[1.5rem] px-2 py-1 hover:bg-base-200 rounded flex flex-wrap gap-1"
         onClick={openDropdown}
         tabIndex={0}
