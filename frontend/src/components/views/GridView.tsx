@@ -355,6 +355,13 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
   };
 
   const handleAddRow = async () => {
+    // Clear filters so the new row is visible
+    if (simpleFilter || Object.keys(filters).length > 0) {
+      setSimpleFilter('');
+      setFilters({});
+      setActiveViewId(null);
+    }
+    
     const result = await createItem.mutateAsync({ listId, values: {} });
     if (result?.id) {
       setNewItemIds(prev => new Set(prev).add(result.id));
