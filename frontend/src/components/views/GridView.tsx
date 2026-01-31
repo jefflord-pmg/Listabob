@@ -6,6 +6,7 @@ import { AddColumnModal, EditColumnModal } from '../columns';
 import { DateCell, ChoiceCell, BooleanCell, CurrencyCell, HyperlinkCell } from '../cells';
 import { ConfirmModal, Modal } from '../ui';
 import { FilterPanel } from './FilterPanel';
+import { useSettings } from '../../contexts/SettingsContext';
 
 interface GridViewProps {
   listId: string;
@@ -17,6 +18,7 @@ interface GridViewProps {
 type SortDirection = 'asc' | 'desc';
 
 export function GridView({ listId, columns, items, views }: GridViewProps) {
+  const { settings } = useSettings();
   const createItem = useCreateItem();
   const updateItem = useUpdateItem();
   const deleteItem = useDeleteItem();
@@ -187,10 +189,13 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
     } else if (sortDirection === 'asc') {
       // Same column, was asc - switch to desc
       newSortDir = 'desc';
-    } else {
-      // Same column, was desc - clear sort
+    } else if (settings.useTriStateSort) {
+      // Same column, was desc - clear sort (tri-state mode)
       newSortBy = null;
       newSortDir = null;
+    } else {
+      // Same column, was desc - cycle back to asc (two-state mode)
+      newSortDir = 'asc';
     }
     
     // Use the active view (or default) to save sort settings
@@ -319,6 +324,10 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
         if (tableContainerRef.current) {
           tableContainerRef.current.scrollTop = tableContainerRef.current.scrollHeight;
         }
+        // Auto-focus the first cell of the new row
+        if (columns.length > 0) {
+          startEditing(result.id, columns[0].id, '');
+        }
       }, 150);
     }
   };
@@ -373,6 +382,15 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
     if (e.key === 'Enter') {
       saveEdit();
     } else if (e.key === 'Escape') {
+      // If this is a new row (unedited), delete it on ESC
+      if (editingCell && newItemIds.has(editingCell.itemId)) {
+        deleteItem.mutate({ listId, itemId: editingCell.itemId });
+        setNewItemIds(prev => {
+          const next = new Set(prev);
+          next.delete(editingCell.itemId);
+          return next;
+        });
+      }
       setEditingCell(null);
     }
   };

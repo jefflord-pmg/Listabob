@@ -50,10 +50,12 @@ class StatsResponse(BaseModel):
 
 class ConfigResponse(BaseModel):
     backup_path: str | None = None
+    use_tristate_sort: bool = True
 
 
 class UpdateConfigRequest(BaseModel):
     backup_path: str | None = None
+    use_tristate_sort: bool | None = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -76,7 +78,8 @@ def get_system_config():
     """Get system configuration (non-sensitive fields only)."""
     config = get_config()
     return ConfigResponse(
-        backup_path=config.get("backup_path")
+        backup_path=config.get("backup_path"),
+        use_tristate_sort=config.get("use_tristate_sort", True)
     )
 
 
@@ -87,6 +90,9 @@ def update_system_config(request: UpdateConfigRequest):
     
     if request.backup_path is not None:
         config["backup_path"] = request.backup_path
+    
+    if request.use_tristate_sort is not None:
+        config["use_tristate_sort"] = request.use_tristate_sort
     
     save_config(config)
     return {"success": True}

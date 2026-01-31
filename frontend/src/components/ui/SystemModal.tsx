@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Modal } from './Modal';
+import { useSettings } from '../../contexts/SettingsContext';
 
 interface SystemStats {
   total_lists: number;
@@ -17,6 +18,7 @@ interface SystemModalProps {
 }
 
 export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
+  const { settings, updateSettings } = useSettings();
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -147,6 +149,19 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
     }
   };
 
+  const handleTriStateSortChange = async (enabled: boolean) => {
+    updateSettings({ useTriStateSort: enabled });
+    try {
+      await fetch('/api/system/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ use_tristate_sort: enabled }),
+      });
+    } catch (err) {
+      console.error('Failed to save setting:', err);
+    }
+  };
+
   const handleClose = () => {
     setError(null);
     setSuccess(null);
@@ -209,6 +224,37 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
               </div>
             </div>
           ) : null}
+        </div>
+
+        <div className="divider"></div>
+
+        {/* Preferences Section */}
+        <div>
+          <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Preferences
+          </h3>
+          <div className="form-control">
+            <label className="label cursor-pointer justify-start gap-3">
+              <input
+                type="checkbox"
+                className="toggle toggle-primary"
+                checked={settings.useTriStateSort}
+                onChange={(e) => handleTriStateSortChange(e.target.checked)}
+              />
+              <div>
+                <span className="label-text font-medium">Use tri-state sort</span>
+                <p className="text-xs text-base-content/60 mt-0.5">
+                  {settings.useTriStateSort 
+                    ? "Click cycles: ascending → descending → unsorted" 
+                    : "Click cycles: ascending → descending only"}
+                </p>
+              </div>
+            </label>
+          </div>
         </div>
 
         <div className="divider"></div>
