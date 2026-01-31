@@ -76,13 +76,50 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
     onConfirm: () => void;
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
+  // Simple text filter
+  const [simpleFilter, setSimpleFilter] = useState('');
+
   // Track newly created item IDs to show at bottom
   const [newItemIds, setNewItemIds] = useState<Set<string>>(new Set());
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
-  // Filter items based on active filters
+  // Filter items based on active filters and simple text filter
   const filteredItems = useMemo(() => {
-    if (Object.keys(filters).length === 0) return items;
+    let result = items;
+    
+    // Apply simple text filter first
+    if (simpleFilter.trim()) {
+      const searchTerm = simpleFilter.toLowerCase().trim();
+      result = result.filter(item => {
+        // Check all column values for matching text
+        return columns.some(column => {
+          const value = item.values[column.id];
+          if (value === null || value === undefined) return false;
+          
+          // Convert value to display text based on column type
+          let displayText = '';
+          switch (column.column_type) {
+            case 'boolean':
+              displayText = value ? 'yes' : 'no';
+              break;
+            case 'rating':
+              displayText = String(value);
+              break;
+            case 'date':
+            case 'datetime':
+              displayText = String(value);
+              break;
+            default:
+              displayText = String(value);
+          }
+          
+          return displayText.toLowerCase().includes(searchTerm);
+        });
+      });
+    }
+    
+    // Then apply column-specific filters
+    if (Object.keys(filters).length === 0) return result;
     
     return items.filter(item => {
       // Check all active filters - item must match ALL column filters
@@ -134,7 +171,7 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
       }
       return true;
     });
-  }, [items, filters, columns]);
+  }, [items, filters, columns, simpleFilter]);
 
   // Sorted items based on view config
   const sortedItems = useMemo(() => {
@@ -571,6 +608,28 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Toolbar */}
         <div className="flex items-center gap-2 mb-2 px-1 flex-shrink-0 flex-wrap">
+          {/* Simple text filter */}
+          <div className="relative">
+            <input
+              type="text"
+              className="input input-sm input-bordered w-48 pl-8"
+              placeholder="Search..."
+              value={simpleFilter}
+              onChange={(e) => setSimpleFilter(e.target.value)}
+            />
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 absolute left-2 top-1/2 -translate-y-1/2 text-base-content/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {simpleFilter && (
+              <button
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-base-content/50 hover:text-base-content"
+                onClick={() => setSimpleFilter('')}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          
           <button
             className={`btn btn-sm ${hasActiveFilters ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
