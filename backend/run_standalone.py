@@ -4,9 +4,6 @@ This is used when building the executable with PyInstaller.
 """
 import os
 import sys
-import webbrowser
-import threading
-import time
 import json
 from pathlib import Path
 
@@ -47,14 +44,14 @@ with open(config_path, 'r') as f:
 PORT = config.get('port', 8000)
 
 
-def open_browser():
-    """Open browser after a short delay to let server start."""
-    time.sleep(2)
-    webbrowser.open(f'http://localhost:{PORT}')
-
-
 def main():
     import uvicorn
+    
+    # If running without console, redirect stdout/stderr to a log file
+    if getattr(sys, 'frozen', False) and sys.stdout is None:
+        log_file = Path(os.environ['LISTABOB_DATA_DIR']) / 'listabob.log'
+        sys.stdout = open(log_file, 'a')
+        sys.stderr = sys.stdout
     
     print("=" * 50)
     print("  Listabob - List Management Application")
@@ -62,13 +59,8 @@ def main():
     print(f"Data directory: {os.environ['LISTABOB_DATA_DIR']}")
     print(f"Config file: {config_path}")
     print()
-    print(f"Starting server at http://localhost:{PORT}")
-    print("Press Ctrl+C to stop")
+    print(f"Server running at http://localhost:{PORT}")
     print("=" * 50)
-    
-    # Open browser in background thread
-    browser_thread = threading.Thread(target=open_browser, daemon=True)
-    browser_thread.start()
     
     # Start the server
     uvicorn.run(
