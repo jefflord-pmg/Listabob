@@ -13,6 +13,23 @@ if not exist "backend" (
     exit /b 1
 )
 
+REM Ask user what they want to do
+echo What would you like to do?
+echo   [1] Full build and create executable
+echo   [2] Just copy existing build to AppData\Local
+echo.
+set /p BUILD_CHOICE="Enter your choice (1-2): "
+
+if /i "!BUILD_CHOICE!"=="2" (
+    call :copy_to_appdata
+    pause
+    exit /b 0
+)
+
+REM ============================================
+REM FULL BUILD STARTS HERE
+REM ============================================
+
 REM Step 1: Build frontend
 echo [1/4] Building frontend...
 cd frontend
@@ -78,8 +95,18 @@ echo.
 echo Command to run:
 echo   gh release create "!RELEASE_TAG!" dist\Listabob.7z
 echo.
-set /p CONFIRM="Publish to GitHub? (y/N): "
-if /i "!CONFIRM!"=="y" (
+
+REM Ask user what to do
+echo.
+echo Options:
+echo   [1] Publish to GitHub
+echo   [2] Copy to AppData\Local\Listabob
+echo   [3] Both
+echo   [4] Skip
+echo.
+set /p CHOICE="Enter your choice (1-4): "
+
+if /i "!CHOICE!"=="1" (
     echo Publishing to GitHub...
     gh release create "!RELEASE_TAG!" dist\Listabob.7z
     if errorlevel 1 (
@@ -87,8 +114,123 @@ if /i "!CONFIRM!"=="y" (
     ) else (
         echo Release created: !RELEASE_TAG!
     )
+) else if /i "!CHOICE!"=="2" (
+    call :copy_to_appdata
+) else if /i "!CHOICE!"=="3" (
+    echo Publishing to GitHub...
+    gh release create "!RELEASE_TAG!" dist\Listabob.7z
+    if errorlevel 1 (
+        echo ERROR: GitHub release failed.
+    ) else (
+        echo Release created: !RELEASE_TAG!
+    )
+    call :copy_to_appdata
 ) else (
     echo Skipped.
 )
 echo.
 pause
+exit /b 0
+
+REM ============================================
+REM SUBROUTINE: Copy to AppData
+REM ============================================
+:copy_to_appdata
+echo.
+echo ============================================
+echo   Copying Listabob to AppData\Local
+echo ============================================
+echo.
+set APPDATA_DIR=%UserProfile%\AppData\Local\Listabob
+
+echo [*] Destination: !APPDATA_DIR!
+echo.
+
+REM Check if source exists
+if not exist "dist\Listabob" (
+    echo ERROR: dist\Listabob folder not found. Please do a full build first.
+    exit /b 1
+)
+
+REM Check if Listabob is running before we stop it
+set WAS_RUNNING=0
+tasklist /FI "IMAGENAME eq Listabob.exe" 2>nul | find /I /N "Listabob.exe">nul
+if "%ERRORLEVEL%"=="0" (
+    set WAS_RUNNING=1
+    echo [1/4] Stopping running Listabob.exe...
+) else (
+    echo [1/4] Listabob.exe not running
+)
+
+taskkill /IM Listabob.exe /F 2>nul
+
+timeout /t 2 /nobreak
+echo.
+
+REM Create backup of existing data if it exists
+if exist "!APPDATA_DIR!" (
+    echo [2/4] Backing up existing data...
+    if exist "!APPDATA_DIR!\data" (
+        echo     Source: !APPDATA_DIR!\data
+        echo     Backup: !APPDATA_DIR!\data_backup
+        robocopy "!APPDATA_DIR!\data" "!APPDATA_DIR!\data_backup" /E >nul 2>&1
+        if errorlevel 0 (
+            echo     Backup completed successfully
+        ) else (
+            echo     Backup completed with warnings
+        )
+    ) else (
+        echo     No existing data folder to backup
+    )
+) else (
+    echo [2/4] Creating new AppData directory...
+    echo     Directory: !APPDATA_DIR!
+)
+echo.
+
+REM Copy the new build
+echo [3/4] Copying files from dist\Listabob...
+echo     Source: dist\Listabob
+echo     Destination: !APPDATA_DIR!
+robocopy "dist\Listabob" "!APPDATA_DIR!" /E
+if errorlevel 1 (
+    echo     Some files copied with warnings
+) else (
+    echo     All files copied successfully
+)
+echo.
+
+REM Restore the data folder from backup if it exists
+if exist "!APPDATA_DIR!\data_backup" (
+    echo [4/4] Restoring data from backup...
+    echo     Removing new empty data folder...
+    rmdir /S /Q "!APPDATA_DIR!\data" 2>nul
+    echo     Restoring backup...
+    ren "!APPDATA_DIR!\data_backup" "data" >nul 2>&1
+    if errorlevel 0 (
+        echo     Data restored successfully
+    ) else (
+        echo     Data restored with warnings
+    )
+) else (
+    echo [4/4] No backup to restore (first time install)
+)
+echo.
+
+echo ============================================
+echo   Copy Complete!
+echo ============================================
+echo.
+echo Installation location: !APPDATA_DIR!
+echo Run with: !APPDATA_DIR!\Listabob.exe
+echo.
+
+REM If it was running before, start it again
+if !WAS_RUNNING! equ 1 (
+    echo.
+    echo Restarting Listabob.exe...
+    start "" "!APPDATA_DIR!\Listabob.exe"
+    echo Started successfully
+)
+echo.
+exit /b 0
