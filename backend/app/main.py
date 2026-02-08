@@ -8,6 +8,10 @@ from fastapi.responses import FileResponse
 from app.config import settings
 from app.database import engine, Base
 from app.api import lists, items, views, templates, imports, exports, auth, system
+from app.migrations import run_migrations
+
+# Run lightweight migrations for existing databases (before create_all for new ones)
+run_migrations()
 
 # Create database tables
 Base.metadata.create_all(bind=engine)

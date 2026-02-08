@@ -56,6 +56,7 @@ export interface Item {
   values: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
 }
 
 export interface View {
@@ -92,4 +93,17 @@ export interface CreateItemPayload {
 
 export interface UpdateItemPayload {
   values: Record<string, unknown>;
+}
+
+export interface RecycleBinItem {
+  id: string;
+  list_id: string;
+  list_name: string;
+  list_icon: string | null;
+  list_color: string | null;
+  position: number | null;
+  values: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string;
 }

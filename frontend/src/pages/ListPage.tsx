@@ -11,7 +11,6 @@ export function ListPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: list, isLoading: listLoading, error: listError } = useList(id!);
-  const { data: items, isLoading: itemsLoading } = useItems(id!);
   const updateList = useUpdateList();
   const deleteList = useDeleteList();
   
@@ -20,6 +19,10 @@ export function ListPage() {
   const [editIcon, setEditIcon] = useState<string | null>(null);
   const [editColor, setEditColor] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showInternalColumns, setShowInternalColumns] = useState(false);
+  const [showDeletedItems, setShowDeletedItems] = useState(false);
+
+  const { data: items, isLoading: itemsLoading } = useItems(id!, showDeletedItems);
 
   if (listLoading || itemsLoading) {
     return (
@@ -124,6 +127,29 @@ export function ListPage() {
             <ul tabIndex={0} className="dropdown-content z-[100] menu p-2 shadow bg-base-200 rounded-box w-52">
               <li><button onClick={openEditModal}>Edit List</button></li>
               <li className="divider"></li>
+              <li>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="checkbox checkbox-sm"
+                    checked={showInternalColumns}
+                    onChange={() => setShowInternalColumns(!showInternalColumns)}
+                  />
+                  Show Internal Columns
+                </label>
+              </li>
+              <li>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="checkbox checkbox-sm"
+                    checked={showDeletedItems}
+                    onChange={() => setShowDeletedItems(!showDeletedItems)}
+                  />
+                  Show Deleted Items
+                </label>
+              </li>
+              <li className="divider"></li>
               <li className="menu-title"><span>Export CSV</span></li>
               <li><button onClick={() => handleExport(true)}>With Headers</button></li>
               <li><button onClick={() => handleExport(false)}>Without Headers</button></li>
@@ -149,6 +175,8 @@ export function ListPage() {
             columns={list.columns} 
             items={items || []} 
             views={list.views || []}
+            showInternalColumns={showInternalColumns}
+            showDeletedItems={showDeletedItems}
           />
         )}
       </div>

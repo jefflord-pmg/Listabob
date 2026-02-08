@@ -52,7 +52,8 @@ class Item(Base):
     list_id: Mapped[str] = mapped_column(String(36), ForeignKey("lists.id", ondelete="CASCADE"), nullable=False)
     position: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     
     # Relationships
     list: Mapped["List"] = relationship("List", back_populates="items")

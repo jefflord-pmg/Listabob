@@ -162,6 +162,32 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
     }
   };
 
+  const handleUnknownSortPositionChange = async (position: 'top' | 'bottom') => {
+    updateSettings({ unknownSortPosition: position });
+    try {
+      await fetch('/api/system/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unknown_sort_position: position }),
+      });
+    } catch (err) {
+      console.error('Failed to save setting:', err);
+    }
+  };
+
+  const handleConfirmDeleteChange = async (enabled: boolean) => {
+    updateSettings({ confirmDelete: enabled });
+    try {
+      await fetch('/api/system/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm_delete: enabled }),
+      });
+    } catch (err) {
+      console.error('Failed to save setting:', err);
+    }
+  };
+
   const handleClose = () => {
     setError(null);
     setSuccess(null);
@@ -251,6 +277,42 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
                   {settings.useTriStateSort 
                     ? "Click cycles: ascending → descending → unsorted" 
                     : "Click cycles: ascending → descending only"}
+                </p>
+              </div>
+            </label>
+          </div>
+          <div className="form-control mt-3">
+            <label className="label">
+              <span className="label-text font-medium">Where to sort unknown values</span>
+            </label>
+            <select
+              className="select select-bordered select-sm w-full max-w-xs"
+              value={settings.unknownSortPosition}
+              onChange={(e) => handleUnknownSortPositionChange(e.target.value as 'top' | 'bottom')}
+            >
+              <option value="bottom">Bottom</option>
+              <option value="top">Top</option>
+            </select>
+            <label className="label">
+              <span className="label-text-alt text-base-content/60">
+                Items with empty/unknown values are placed at the {settings.unknownSortPosition} when sorting
+              </span>
+            </label>
+          </div>
+          <div className="form-control mt-3">
+            <label className="label cursor-pointer justify-start gap-3">
+              <input
+                type="checkbox"
+                className="toggle toggle-primary"
+                checked={settings.confirmDelete}
+                onChange={(e) => handleConfirmDeleteChange(e.target.checked)}
+              />
+              <div>
+                <span className="label-text font-medium">Confirm before deleting</span>
+                <p className="text-xs text-base-content/60 mt-0.5">
+                  {settings.confirmDelete
+                    ? "Show confirmation dialog before deleting items"
+                    : "Delete items immediately (they go to Recycle Bin)"}
                 </p>
               </div>
             </label>

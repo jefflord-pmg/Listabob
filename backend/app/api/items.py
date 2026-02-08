@@ -109,20 +109,25 @@ def item_to_response(item: Item, columns: list[Column], db: Session) -> ItemResp
         position=item.position,
         values=values,
         created_at=item.created_at,
-        updated_at=item.updated_at
+        updated_at=item.updated_at,
+        deleted_at=item.deleted_at
     )
 
 
 @router.get("", response_model=list[ItemResponse])
 def get_items(
     list_id: str,
+    include_deleted: bool = Query(False),
     db: Session = Depends(get_db)
 ):
     db_list = db.query(List).filter(List.id == list_id).first()
     if not db_list:
         raise HTTPException(status_code=404, detail="List not found")
     
-    items = db.query(Item).filter(Item.list_id == list_id).order_by(Item.position).all()
+    query = db.query(Item).filter(Item.list_id == list_id)
+    if not include_deleted:
+        query = query.filter(Item.deleted_at.is_(None))
+    items = query.order_by(Item.position).all()
     return [item_to_response(item, db_list.columns, db) for item in items]
 
 
@@ -227,6 +232,9 @@ def update_item(list_id: str, item_id: str, data: ItemUpdate, db: Session = Depe
             )
             db.add(item_value)
     
+    # Explicitly update the modified timestamp
+    item.updated_at = datetime.utcnow()
+    
     db.commit()
     
     # Reload item
@@ -236,6 +244,41 @@ def update_item(list_id: str, item_id: str, data: ItemUpdate, db: Session = Depe
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_item(list_id: str, item_id: str, db: Session = Depends(get_db)):
+    item = db.query(Item).filter(Item.id == item_id, Item.list_id == list_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    # Soft delete — use bulk update to avoid triggering onupdate for updated_at
+    db.query(Item).filter(Item.id == item_id).update(
+        {"deleted_at": datetime.utcnow()}, synchronize_session="fetch"
+    )
+    db.commit()
+
+
+@router.post("/{item_id}/restore", response_model=ItemResponse)
+def restore_item(list_id: str, item_id: str, db: Session = Depends(get_db)):
+    db_list = db.query(List).filter(List.id == list_id).first()
+    if not db_list:
+        raise HTTPException(status_code=404, detail="List not found")
+    
+    item = db.query(Item).filter(Item.id == item_id, Item.list_id == list_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    if item.deleted_at is None:
+        raise HTTPException(status_code=400, detail="Item is not deleted")
+    
+    # Use bulk update to only clear deleted_at without touching updated_at
+    db.query(Item).filter(Item.id == item_id).update(
+        {"deleted_at": None}, synchronize_session="fetch"
+    )
+    db.commit()
+    
+    item = db.query(Item).filter(Item.id == item_id).first()
+    return item_to_response(item, db_list.columns, db)
+
+
+@router.delete("/{item_id}/permanent", status_code=status.HTTP_204_NO_CONTENT)
+def permanent_delete_item(list_id: str, item_id: str, db: Session = Depends(get_db)):
     item = db.query(Item).filter(Item.id == item_id, Item.list_id == list_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")

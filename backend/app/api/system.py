@@ -1,15 +1,17 @@
 import os
 import sys
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from pathlib import Path
 import json
 import sqlite3
 from datetime import datetime
 
-from app.database import SessionLocal
+from app.database import SessionLocal, get_db
 from app.models import List, Column, Item, ItemValue, View
 from app.config import DATA_DIR
+from app.schemas import ItemResponse
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -51,11 +53,15 @@ class StatsResponse(BaseModel):
 class ConfigResponse(BaseModel):
     backup_path: str | None = None
     use_tristate_sort: bool = True
+    unknown_sort_position: str = "bottom"
+    confirm_delete: bool = False
 
 
 class UpdateConfigRequest(BaseModel):
     backup_path: str | None = None
     use_tristate_sort: bool | None = None
+    unknown_sort_position: str | None = None
+    confirm_delete: bool | None = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -79,7 +85,9 @@ def get_system_config():
     config = get_config()
     return ConfigResponse(
         backup_path=config.get("backup_path"),
-        use_tristate_sort=config.get("use_tristate_sort", True)
+        use_tristate_sort=config.get("use_tristate_sort", True),
+        unknown_sort_position=config.get("unknown_sort_position", "bottom"),
+        confirm_delete=config.get("confirm_delete", False)
     )
 
 
@@ -93,6 +101,14 @@ def update_system_config(request: UpdateConfigRequest):
     
     if request.use_tristate_sort is not None:
         config["use_tristate_sort"] = request.use_tristate_sort
+    
+    if request.unknown_sort_position is not None:
+        if request.unknown_sort_position not in ("top", "bottom"):
+            raise HTTPException(status_code=400, detail="unknown_sort_position must be 'top' or 'bottom'")
+        config["unknown_sort_position"] = request.unknown_sort_position
+    
+    if request.confirm_delete is not None:
+        config["confirm_delete"] = request.confirm_delete
     
     save_config(config)
     return {"success": True}
@@ -186,3 +202,102 @@ def backup_database(request: BackupRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Backup failed: {str(e)}")
+
+
+# --- Recycle Bin Endpoints ---
+
+class RecycleBinItemResponse(BaseModel):
+    id: str
+    list_id: str
+    list_name: str
+    list_icon: str | None = None
+    list_color: str | None = None
+    position: int | None
+    values: dict
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/recycle-bin", response_model=list[RecycleBinItemResponse])
+def get_recycle_bin(db: Session = Depends(get_db)):
+    """Get all soft-deleted items across all lists."""
+    deleted_items = (
+        db.query(Item)
+        .filter(Item.deleted_at.isnot(None))
+        .order_by(Item.deleted_at.desc())
+        .all()
+    )
+    
+    results = []
+    # Cache list info to avoid repeated queries
+    list_cache: dict[str, List] = {}
+    for item in deleted_items:
+        if item.list_id not in list_cache:
+            db_list = db.query(List).filter(List.id == item.list_id).first()
+            if db_list:
+                list_cache[item.list_id] = db_list
+        
+        db_list = list_cache.get(item.list_id)
+        if not db_list:
+            continue
+        
+        # Build values dict
+        from app.api.items import extract_value
+        column_types = {col.id: col.column_type for col in db_list.columns}
+        values = {}
+        item_values = db.query(ItemValue).filter(ItemValue.item_id == item.id).all()
+        for iv in item_values:
+            col_type = column_types.get(iv.column_id, "text")
+            values[iv.column_id] = extract_value(iv, col_type)
+        
+        results.append(RecycleBinItemResponse(
+            id=item.id,
+            list_id=item.list_id,
+            list_name=db_list.name,
+            list_icon=db_list.icon,
+            list_color=db_list.color,
+            position=item.position,
+            values=values,
+            created_at=item.created_at,
+            updated_at=item.updated_at,
+            deleted_at=item.deleted_at,
+        ))
+    
+    return results
+
+
+@router.post("/recycle-bin/{item_id}/restore", response_model=ItemResponse)
+def restore_from_recycle_bin(item_id: str, db: Session = Depends(get_db)):
+    """Restore a soft-deleted item from the recycle bin."""
+    item = db.query(Item).filter(Item.id == item_id, Item.deleted_at.isnot(None)).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Deleted item not found")
+    
+    db_list = db.query(List).filter(List.id == item.list_id).first()
+    if not db_list:
+        raise HTTPException(status_code=404, detail="Parent list no longer exists")
+    
+    # Use bulk update to only clear deleted_at without touching updated_at
+    db.query(Item).filter(Item.id == item_id).update(
+        {"deleted_at": None}, synchronize_session="fetch"
+    )
+    db.commit()
+    
+    from app.api.items import item_to_response
+    item = db.query(Item).filter(Item.id == item_id).first()
+    return item_to_response(item, db_list.columns, db)
+
+
+@router.delete("/recycle-bin/{item_id}", status_code=204)
+def permanent_delete_from_recycle_bin(item_id: str, db: Session = Depends(get_db)):
+    """Permanently delete an item from the recycle bin."""
+    item = db.query(Item).filter(Item.id == item_id, Item.deleted_at.isnot(None)).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Deleted item not found")
+    
+    db.delete(item)
+    db.commit()

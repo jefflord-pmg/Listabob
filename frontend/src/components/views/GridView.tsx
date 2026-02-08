@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import type { Column, Item, ColumnType, View } from '../../types';
-import { useCreateItem, useUpdateItem, useDeleteItem } from '../../hooks/useItems';
+import { useCreateItem, useUpdateItem, useDeleteItem, useRestoreItem } from '../../hooks/useItems';
 import { useAddColumn, useDeleteColumn, useUpdateColumn, useReorderColumns, useUpdateView, useCreateView, useDeleteView } from '../../hooks/useLists';
 import { AddColumnModal, EditColumnModal } from '../columns';
 import { DateCell, ChoiceCell, BooleanCell, CurrencyCell, HyperlinkCell } from '../cells';
@@ -13,15 +13,37 @@ interface GridViewProps {
   columns: Column[];
   items: Item[];
   views: View[];
+  showInternalColumns?: boolean;
+  showDeletedItems?: boolean;
 }
 
 type SortDirection = 'asc' | 'desc';
 
-export function GridView({ listId, columns, items, views }: GridViewProps) {
+// Internal column definitions for created_at, updated_at, deleted_at
+interface InternalColumnDef {
+  id: string;
+  name: string;
+  key: 'created_at' | 'updated_at' | 'deleted_at';
+}
+
+const INTERNAL_COLUMNS: InternalColumnDef[] = [
+  { id: '__created_at', name: 'Created', key: 'created_at' },
+  { id: '__updated_at', name: 'Modified', key: 'updated_at' },
+  { id: '__deleted_at', name: 'Deleted', key: 'deleted_at' },
+];
+
+// Ensure UTC datetime strings from backend are interpreted correctly
+function formatUtcDate(isoString: string): string {
+  const s = isoString.endsWith('Z') ? isoString : isoString + 'Z';
+  return new Date(s).toLocaleString();
+}
+
+export function GridView({ listId, columns, items, views, showInternalColumns = false, showDeletedItems = false }: GridViewProps) {
   const { settings } = useSettings();
   const createItem = useCreateItem();
   const updateItem = useUpdateItem();
   const deleteItem = useDeleteItem();
+  const restoreItem = useRestoreItem();
   const addColumn = useAddColumn();
   const deleteColumn = useDeleteColumn();
   const updateColumn = useUpdateColumn();
@@ -175,43 +197,63 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
 
   // Sorted items based on view config
   const sortedItems = useMemo(() => {
-    // Separate new items from regular items
-    const regularItems = filteredItems.filter(item => !newItemIds.has(item.id));
+    // Separate new items, deleted items, and regular items
+    const regularItems = filteredItems.filter(item => !newItemIds.has(item.id) && !item.deleted_at);
+    const deletedItems = filteredItems.filter(item => !!item.deleted_at);
     const newItems = filteredItems.filter(item => newItemIds.has(item.id));
+    
+    const nullsGoToBottom = settings.unknownSortPosition === 'bottom';
     
     let sortedRegular = regularItems;
     
     if (sortColumnId && sortDirection) {
-      const column = columns.find(c => c.id === sortColumnId);
-      if (column) {
+      // Check if sorting by internal column
+      const internalCol = INTERNAL_COLUMNS.find(c => c.id === sortColumnId);
+      
+      if (internalCol) {
         sortedRegular = [...regularItems].sort((a, b) => {
-          const aVal = a.values[sortColumnId];
-          const bVal = b.values[sortColumnId];
+          const aVal = a[internalCol.key];
+          const bVal = b[internalCol.key];
           
-          // Handle null/undefined
           if (aVal == null && bVal == null) return 0;
-          if (aVal == null) return sortDirection === 'asc' ? 1 : -1;
-          if (bVal == null) return sortDirection === 'asc' ? -1 : 1;
+          if (aVal == null) return nullsGoToBottom ? 1 : -1;
+          if (bVal == null) return nullsGoToBottom ? -1 : 1;
           
-          let comparison = 0;
-          if (column.column_type === 'number' || column.column_type === 'currency' || column.column_type === 'rating') {
-            comparison = Number(aVal) - Number(bVal);
-          } else if (column.column_type === 'boolean') {
-            comparison = (aVal === bVal) ? 0 : aVal ? -1 : 1;
-          } else if (column.column_type === 'date' || column.column_type === 'datetime') {
-            comparison = new Date(String(aVal)).getTime() - new Date(String(bVal)).getTime();
-          } else {
-            comparison = String(aVal).localeCompare(String(bVal));
-          }
-          
+          const comparison = new Date(aVal).getTime() - new Date(bVal).getTime();
           return sortDirection === 'desc' ? -comparison : comparison;
         });
+      } else {
+        const column = columns.find(c => c.id === sortColumnId);
+        if (column) {
+          sortedRegular = [...regularItems].sort((a, b) => {
+            const aVal = a.values[sortColumnId];
+            const bVal = b.values[sortColumnId];
+            
+            // Handle null/undefined — always push to configured position
+            if (aVal == null && bVal == null) return 0;
+            if (aVal == null) return nullsGoToBottom ? 1 : -1;
+            if (bVal == null) return nullsGoToBottom ? -1 : 1;
+            
+            let comparison = 0;
+            if (column.column_type === 'number' || column.column_type === 'currency' || column.column_type === 'rating') {
+              comparison = Number(aVal) - Number(bVal);
+            } else if (column.column_type === 'boolean') {
+              comparison = (aVal === bVal) ? 0 : aVal ? -1 : 1;
+            } else if (column.column_type === 'date' || column.column_type === 'datetime') {
+              comparison = new Date(String(aVal)).getTime() - new Date(String(bVal)).getTime();
+            } else {
+              comparison = String(aVal).localeCompare(String(bVal));
+            }
+            
+            return sortDirection === 'desc' ? -comparison : comparison;
+          });
+        }
       }
     }
     
-    // New items always go at the bottom
-    return [...sortedRegular, ...newItems];
-  }, [filteredItems, sortColumnId, sortDirection, columns, newItemIds]);
+    // New items always go at the bottom, deleted items after that
+    return [...sortedRegular, ...newItems, ...deletedItems];
+  }, [filteredItems, sortColumnId, sortDirection, columns, newItemIds, settings.unknownSortPosition]);
 
   const handleSort = (columnId: string) => {
     if (!defaultView) return;
@@ -442,15 +484,19 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
   };
 
   const handleDeleteRow = (itemId: string) => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Delete Row',
-      message: 'Are you sure you want to delete this row? This action cannot be undone.',
-      onConfirm: () => {
-        deleteItem.mutate({ listId, itemId });
-        setConfirmModal(m => ({ ...m, isOpen: false }));
-      },
-    });
+    if (settings.confirmDelete) {
+      setConfirmModal({
+        isOpen: true,
+        title: 'Delete Row',
+        message: 'Are you sure you want to delete this row?',
+        onConfirm: () => {
+          deleteItem.mutate({ listId, itemId });
+          setConfirmModal(m => ({ ...m, isOpen: false }));
+        },
+      });
+    } else {
+      deleteItem.mutate({ listId, itemId });
+    }
   };
 
   const handleCellChange = (itemId: string, columnId: string, value: unknown) => {
@@ -791,6 +837,19 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
                   </div>
                 </th>
               ))}
+              {showInternalColumns && INTERNAL_COLUMNS
+                .filter(ic => ic.key !== 'deleted_at' || showDeletedItems)
+                .map((ic) => (
+                <th key={ic.id} className="bg-base-200 select-none">
+                  <span
+                    className="cursor-pointer hover:text-primary text-base-content/60 italic"
+                    onClick={() => handleSort(ic.id)}
+                  >
+                    {ic.name}
+                    {getSortIcon(ic.id)}
+                  </span>
+                </th>
+              ))}
               <th className="bg-base-200 w-24">
                 <button
                   className="btn btn-ghost btn-xs"
@@ -806,26 +865,54 @@ export function GridView({ listId, columns, items, views }: GridViewProps) {
           </tr>
         </thead>
         <tbody>
-          {sortedItems.map((item) => (
+          {sortedItems.map((item) => {
+            const isDeleted = !!item.deleted_at;
+            return (
             <tr 
               key={item.id} 
-              className={`hover ${newItemIds.has(item.id) ? 'bg-primary/10' : ''}`}
+              className={`hover ${newItemIds.has(item.id) ? 'bg-primary/10' : ''} ${isDeleted ? 'opacity-40' : ''}`}
             >
               {columns.map((column) => (
-                <td key={column.id}>{renderCell(item, column)}</td>
+                <td key={column.id} className={isDeleted ? 'line-through' : ''}>
+                  {isDeleted ? (
+                    <span className="px-2 py-1">{item.values[column.id] != null ? String(item.values[column.id]) : ''}</span>
+                  ) : (
+                    renderCell(item, column)
+                  )}
+                </td>
+              ))}
+              {showInternalColumns && INTERNAL_COLUMNS
+                .filter(ic => ic.key !== 'deleted_at' || showDeletedItems)
+                .map((ic) => (
+                <td key={ic.id} className="text-base-content/50 text-xs whitespace-nowrap">
+                  {item[ic.key] ? formatUtcDate(item[ic.key] as string) : '—'}
+                </td>
               ))}
               <td>
-                <button
-                  className="btn btn-ghost btn-xs text-error"
-                  onClick={() => handleDeleteRow(item.id)}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
+                {isDeleted ? (
+                  <button
+                    className="btn btn-ghost btn-xs text-success"
+                    onClick={() => restoreItem.mutate({ listId, itemId: item.id })}
+                    title="Restore item"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                    </svg>
+                  </button>
+                ) : (
+                  <button
+                    className="btn btn-ghost btn-xs text-error"
+                    onClick={() => handleDeleteRow(item.id)}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                )}
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
       </div>

@@ -133,6 +133,7 @@ class ItemResponse(BaseModel):
     values: dict[str, Any] = {}  # column_id -> value (flattened)
     created_at: datetime
     updated_at: datetime
+    deleted_at: datetime | None = None
 
     class Config:
         from_attributes = True

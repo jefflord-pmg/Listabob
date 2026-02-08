@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout } from './components/layout';
-import { HomePage, ListPage, LoginPage } from './pages';
+import { HomePage, ListPage, LoginPage, RecycleBinPage } from './pages';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 
@@ -34,6 +34,7 @@ function AppContent() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/list/:id" element={<ListPage />} />
+        <Route path="/recycle-bin" element={<RecycleBinPage />} />
       </Routes>
     </Layout>
   );

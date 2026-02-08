@@ -2,6 +2,8 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 
 interface Settings {
   useTriStateSort: boolean;
+  unknownSortPosition: 'top' | 'bottom';
+  confirmDelete: boolean;
 }
 
 interface SettingsContextType {
@@ -12,6 +14,8 @@ interface SettingsContextType {
 
 const defaultSettings: Settings = {
   useTriStateSort: true,
+  unknownSortPosition: 'bottom',
+  confirmDelete: false,
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -26,6 +30,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         const data = await response.json();
         setSettings({
           useTriStateSort: data.use_tristate_sort ?? true,
+          unknownSortPosition: data.unknown_sort_position ?? 'bottom',
+          confirmDelete: data.confirm_delete ?? false,
         });
       }
     } catch (err) {
