@@ -15,7 +15,10 @@ export function HyperlinkCell({ value, onChange }: HyperlinkCellProps) {
   };
 
   const save = () => {
-    onChange(editValue.trim() || null);
+    const newValue = editValue.trim() || null;
+    if (newValue !== (value || null)) {
+      onChange(newValue);
+    }
     setIsEditing(false);
   };
 

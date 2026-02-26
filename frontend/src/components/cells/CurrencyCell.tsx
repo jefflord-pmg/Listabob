@@ -17,7 +17,10 @@ export function CurrencyCell({ value, onChange, symbol = '$' }: CurrencyCellProp
 
   const save = () => {
     const num = parseFloat(editValue);
-    onChange(isNaN(num) ? null : num);
+    const newValue = isNaN(num) ? null : num;
+    if (newValue !== value) {
+      onChange(newValue);
+    }
     setIsEditing(false);
   };
 

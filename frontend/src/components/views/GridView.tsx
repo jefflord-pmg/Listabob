@@ -54,6 +54,7 @@ export function GridView({ listId, columns, items, views, showInternalColumns = 
   
   const [editingCell, setEditingCell] = useState<{ itemId: string; columnId: string } | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [editOriginalValue, setEditOriginalValue] = useState('');
   const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
   const [editingColumn, setEditingColumn] = useState<Column | null>(null);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
@@ -434,11 +435,19 @@ export function GridView({ listId, columns, items, views, showInternalColumns = 
 
   const startEditing = (itemId: string, columnId: string, currentValue: unknown) => {
     setEditingCell({ itemId, columnId });
-    setEditValue(currentValue?.toString() || '');
+    const strValue = currentValue?.toString() || '';
+    setEditValue(strValue);
+    setEditOriginalValue(strValue);
   };
 
   const saveEdit = () => {
     if (!editingCell) return;
+    
+    // Skip update if value hasn't changed
+    if (editValue === editOriginalValue) {
+      setEditingCell(null);
+      return;
+    }
     
     const column = columns.find(c => c.id === editingCell.columnId);
     let value: unknown = editValue;
