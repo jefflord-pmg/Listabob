@@ -55,6 +55,8 @@ class ConfigResponse(BaseModel):
     use_tristate_sort: bool = True
     unknown_sort_position: str = "bottom"
     confirm_delete: bool = False
+    gemini_api_key: str | None = None
+    gemini_model: str | None = None
 
 
 class UpdateConfigRequest(BaseModel):
@@ -62,6 +64,8 @@ class UpdateConfigRequest(BaseModel):
     use_tristate_sort: bool | None = None
     unknown_sort_position: str | None = None
     confirm_delete: bool | None = None
+    gemini_api_key: str | None = None
+    gemini_model: str | None = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -87,7 +91,9 @@ def get_system_config():
         backup_path=config.get("backup_path"),
         use_tristate_sort=config.get("use_tristate_sort", True),
         unknown_sort_position=config.get("unknown_sort_position", "bottom"),
-        confirm_delete=config.get("confirm_delete", False)
+        confirm_delete=config.get("confirm_delete", False),
+        gemini_api_key=config.get("gemini_api_key"),
+        gemini_model=config.get("gemini_model"),
     )
 
 
@@ -109,6 +115,12 @@ def update_system_config(request: UpdateConfigRequest):
     
     if request.confirm_delete is not None:
         config["confirm_delete"] = request.confirm_delete
+    
+    if request.gemini_api_key is not None:
+        config["gemini_api_key"] = request.gemini_api_key
+    
+    if request.gemini_model is not None:
+        config["gemini_model"] = request.gemini_model
     
     save_config(config)
     return {"success": True}

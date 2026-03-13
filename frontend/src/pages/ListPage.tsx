@@ -171,7 +171,8 @@ export function ListPage() {
           </div>
         ) : (
           <GridView 
-            listId={list.id} 
+            listId={list.id}
+            listName={list.name}
             columns={list.columns} 
             items={items || []} 
             views={list.views || []}

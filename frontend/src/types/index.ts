@@ -95,6 +95,28 @@ export interface UpdateItemPayload {
   values: Record<string, unknown>;
 }
 
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatRequest {
+  list_name: string;
+  item_context: Record<string, unknown>;
+  messages: ChatMessage[];
+  model?: string;
+}
+
+export interface ChatResponse {
+  message: string;
+  model: string;
+}
+
+export interface GeminiModel {
+  id: string;
+  name: string;
+}
+
 export interface RecycleBinItem {
   id: string;
   list_id: string;

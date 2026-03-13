@@ -34,6 +34,10 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
   const [backupPath, setBackupPath] = useState('');
   const [backingUp, setBackingUp] = useState(false);
 
+  // Gemini AI
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [geminiModel, setGeminiModel] = useState('');
+
   useEffect(() => {
     if (isOpen) {
       fetchStats();
@@ -62,6 +66,8 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
       if (response.ok) {
         const data = await response.json();
         if (data.backup_path) setBackupPath(data.backup_path);
+        if (data.gemini_api_key) setGeminiApiKey(data.gemini_api_key);
+        if (data.gemini_model) setGeminiModel(data.gemini_model);
       }
     } catch (err) {
       console.error('Failed to fetch config:', err);
@@ -185,6 +191,29 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
       });
     } catch (err) {
       console.error('Failed to save setting:', err);
+    }
+  };
+
+  const handleSaveGeminiSettings = async () => {
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await fetch('/api/system/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gemini_api_key: geminiApiKey,
+          gemini_model: geminiModel || null,
+        }),
+      });
+      if (response.ok) {
+        setSuccess('AI settings saved');
+      } else {
+        setError('Failed to save AI settings');
+      }
+    } catch (err) {
+      console.error('Failed to save AI settings:', err);
+      setError('Failed to save AI settings');
     }
   };
 
@@ -316,6 +345,63 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
                 </p>
               </div>
             </label>
+          </div>
+        </div>
+
+        <div className="divider"></div>
+
+        {/* AI Settings Section */}
+        <div>
+          <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            AI Settings (Gemini)
+          </h3>
+          <div className="space-y-3">
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text">Gemini API Key</span>
+              </label>
+              <input
+                type="password"
+                className="input input-bordered w-full"
+                placeholder="Enter your Google Gemini API key"
+                value={geminiApiKey}
+                onChange={(e) => setGeminiApiKey(e.target.value)}
+              />
+              <label className="label">
+                <span className="label-text-alt text-base-content/60">
+                  Get a key from{' '}
+                  <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="link link-primary">
+                    Google AI Studio
+                  </a>
+                </span>
+              </label>
+            </div>
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text">Default Model</span>
+              </label>
+              <input
+                type="text"
+                className="input input-bordered w-full"
+                placeholder="e.g. gemini-2.0-flash (leave empty for default)"
+                value={geminiModel}
+                onChange={(e) => setGeminiModel(e.target.value)}
+              />
+              <label className="label">
+                <span className="label-text-alt text-base-content/60">
+                  You can also select a model in the chat modal
+                </span>
+              </label>
+            </div>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={handleSaveGeminiSettings}
+            >
+              Save AI Settings
+            </button>
           </div>
         </div>
 
