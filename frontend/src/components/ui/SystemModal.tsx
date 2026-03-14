@@ -37,6 +37,7 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
   // Gemini AI
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [geminiModel, setGeminiModel] = useState('');
+  const [geminiSystemPrompt, setGeminiSystemPrompt] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -68,6 +69,7 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
         if (data.backup_path) setBackupPath(data.backup_path);
         if (data.gemini_api_key) setGeminiApiKey(data.gemini_api_key);
         if (data.gemini_model) setGeminiModel(data.gemini_model);
+        if (data.gemini_system_prompt) setGeminiSystemPrompt(data.gemini_system_prompt);
       }
     } catch (err) {
       console.error('Failed to fetch config:', err);
@@ -204,6 +206,7 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
         body: JSON.stringify({
           gemini_api_key: geminiApiKey,
           gemini_model: geminiModel || null,
+          gemini_system_prompt: geminiSystemPrompt || null,
         }),
       });
       if (response.ok) {
@@ -393,6 +396,25 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
               <label className="label">
                 <span className="label-text-alt text-base-content/60">
                   You can also select a model in the chat modal
+                </span>
+              </label>
+            </div>
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text">System Prompt</span>
+              </label>
+              <textarea
+                className="textarea textarea-bordered w-full font-mono text-xs"
+                rows={6}
+                placeholder="Leave empty for default prompt"
+                value={geminiSystemPrompt}
+                onChange={(e) => setGeminiSystemPrompt(e.target.value)}
+              />
+              <label className="label">
+                <span className="label-text-alt text-base-content/60">
+                  Use <code className="bg-base-300 px-1 rounded">{'{list_name}'}</code> for the list name and{' '}
+                  <code className="bg-base-300 px-1 rounded">{'{item_context_str}'}</code> for the current item's data.
+                  Leave empty to use the default prompt.
                 </span>
               </label>
             </div>

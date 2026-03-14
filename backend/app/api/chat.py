@@ -4,7 +4,10 @@ import json
 from pathlib import Path
 import sys
 
+from app.logger import get_logger
+
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+log = get_logger("listabob.chat")
 
 
 def get_base_dir() -> Path:
@@ -57,18 +60,27 @@ async def chat_with_item(request: ChatRequest):
         import google.generativeai as genai
         genai.configure(api_key=api_key)
 
-        # Build context about the item
-        context_lines = [f"List: {request.list_name}"]
+        # Build item context string
+        context_lines = []
         for col_name, value in request.item_context.items():
             context_lines.append(f"  {col_name}: {value}")
         item_context_str = "\n".join(context_lines)
 
-        system_instruction = (
-            "You are a helpful assistant. The user is asking about a specific item from their list management app. "
-            "Here is the item data:\n\n"
-            f"{item_context_str}\n\n"
+        # Use configurable system prompt or default
+        DEFAULT_SYSTEM_PROMPT = (
+            "You are a helpful assistant. The user is asking about a specific item "
+            "from their list management app.\n\n"
+            "List: {list_name}\n"
+            "Item data:\n{item_context_str}\n\n"
             "Answer the user's questions about this item. Be concise and helpful. "
-            "If the user asks something unrelated to the item, you can still help but keep the item context in mind."
+            "If the user asks something unrelated to the item, you can still help "
+            "but keep the item context in mind."
+        )
+        prompt_template = config.get("gemini_system_prompt") or DEFAULT_SYSTEM_PROMPT
+        system_instruction = prompt_template.replace(
+            "{list_name}", request.list_name
+        ).replace(
+            "{item_context_str}", item_context_str
         )
 
         model = genai.GenerativeModel(
@@ -86,7 +98,19 @@ async def chat_with_item(request: ChatRequest):
 
         # Send the latest user message
         last_message = request.messages[-1].content if request.messages else ""
+
+        # Log what we're about to send
+        log.info(
+            "CHAT REQUEST  list=%r  model=%s  history_turns=%d",
+            request.list_name, model_name, len(history),
+        )
+        log.debug("SYSTEM PROMPT:\n%s", system_instruction)
+        log.debug("USER MESSAGE:\n%s", last_message)
+
         response = chat.send_message(last_message)
+
+        log.info("CHAT RESPONSE  model=%s  chars=%d", model_name, len(response.text))
+        log.debug("ASSISTANT RESPONSE:\n%s", response.text)
 
         return ChatResponse(
             message=response.text,
@@ -94,9 +118,11 @@ async def chat_with_item(request: ChatRequest):
         )
 
     except ImportError:
+        log.error("google-generativeai package is not installed")
         raise HTTPException(status_code=500, detail="google-generativeai package is not installed.")
     except Exception as e:
         error_msg = str(e)
+        log.error("CHAT ERROR  list=%r  model=%s  error=%s", request.list_name, model_name, error_msg)
         if "API_KEY_INVALID" in error_msg or "PERMISSION_DENIED" in error_msg:
             raise HTTPException(status_code=401, detail="Invalid Gemini API key. Please check your key in System Settings.")
         raise HTTPException(status_code=500, detail=f"Gemini API error: {error_msg}")

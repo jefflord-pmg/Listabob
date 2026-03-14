@@ -9,9 +9,13 @@ from app.config import settings
 from app.database import engine, Base
 from app.api import lists, items, views, templates, imports, exports, auth, system, chat
 from app.migrations import run_migrations
+from app.logger import get_logger
+
+log = get_logger("listabob")
 
 # Run lightweight migrations for existing databases (before create_all for new ones)
 run_migrations()
+log.info("Listabob starting up")
 
 # Create database tables
 Base.metadata.create_all(bind=engine)

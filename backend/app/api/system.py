@@ -57,6 +57,7 @@ class ConfigResponse(BaseModel):
     confirm_delete: bool = False
     gemini_api_key: str | None = None
     gemini_model: str | None = None
+    gemini_system_prompt: str | None = None
 
 
 class UpdateConfigRequest(BaseModel):
@@ -66,6 +67,7 @@ class UpdateConfigRequest(BaseModel):
     confirm_delete: bool | None = None
     gemini_api_key: str | None = None
     gemini_model: str | None = None
+    gemini_system_prompt: str | None = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -94,6 +96,7 @@ def get_system_config():
         confirm_delete=config.get("confirm_delete", False),
         gemini_api_key=config.get("gemini_api_key"),
         gemini_model=config.get("gemini_model"),
+        gemini_system_prompt=config.get("gemini_system_prompt"),
     )
 
 
@@ -121,6 +124,9 @@ def update_system_config(request: UpdateConfigRequest):
     
     if request.gemini_model is not None:
         config["gemini_model"] = request.gemini_model
+    
+    if request.gemini_system_prompt is not None:
+        config["gemini_system_prompt"] = request.gemini_system_prompt
     
     save_config(config)
     return {"success": True}
