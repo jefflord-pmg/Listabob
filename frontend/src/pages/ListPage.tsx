@@ -6,6 +6,7 @@ import { GridView } from '../components/views';
 import { useNavigate } from 'react-router-dom';
 import { ConfirmModal, Modal } from '../components/ui';
 import { ColorIconPicker } from '../components/list/ColorIconPicker';
+import { AICompletionModal } from '../components/chat/AICompletionModal';
 
 export function ListPage() {
   const { id } = useParams<{ id: string }>();
@@ -21,6 +22,7 @@ export function ListPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showInternalColumns, setShowInternalColumns] = useState(false);
   const [showDeletedItems, setShowDeletedItems] = useState(false);
+  const [showAICompletion, setShowAICompletion] = useState(false);
 
   const { data: items, isLoading: itemsLoading } = useItems(id!, showDeletedItems);
 
@@ -150,6 +152,8 @@ export function ListPage() {
                 </label>
               </li>
               <li className="divider"></li>
+              <li><button onClick={() => setShowAICompletion(true)}>AI Completion</button></li>
+              <li className="divider"></li>
               <li className="menu-title"><span>Export CSV</span></li>
               <li><button onClick={() => handleExport(true)}>With Headers</button></li>
               <li><button onClick={() => handleExport(false)}>Without Headers</button></li>
@@ -232,6 +236,16 @@ export function ListPage() {
         confirmText="Delete"
         onConfirm={confirmDelete}
         onCancel={() => setShowDeleteConfirm(false)}
+      />
+
+      {/* AI Completion */}
+      <AICompletionModal
+        isOpen={showAICompletion}
+        onClose={() => setShowAICompletion(false)}
+        listId={list.id}
+        listName={list.name}
+        columns={list.columns}
+        items={items || []}
       />
     </div>
   );

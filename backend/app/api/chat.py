@@ -172,3 +172,97 @@ async def list_gemini_models():
     except httpx.RequestError as e:
         raise HTTPException(status_code=502, detail=f"Network error: {str(e)}")
 
+
+class CompletionRequest(BaseModel):
+    list_name: str
+    item_context: dict  # column_name -> value for all existing data
+    target_column: str
+    column_type: str
+    model: str | None = None
+
+
+class CompletionResponse(BaseModel):
+    value: str | None
+    model: str
+
+
+@router.post("/complete", response_model=CompletionResponse)
+async def complete_column_value(request: CompletionRequest):
+    """Use AI to determine the value for a specific column on an item."""
+    config = get_config()
+    api_key = config.get("gemini_api_key")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="Gemini API key not configured. Please set it in System Settings.")
+
+    model_name = request.model or config.get("gemini_model") or "gemini-2.0-flash"
+
+    # Build item context
+    context_lines = []
+    for col_name, value in request.item_context.items():
+        context_lines.append(f"  {col_name}: {value}")
+    item_context_str = "\n".join(context_lines)
+
+    system_instruction = (
+        "You are a data completion assistant. The user has a list called "
+        f"\"{request.list_name}\" with items that have various columns.\n\n"
+        "Your job is to determine the most likely value for a specific column "
+        "based on the other data in the item.\n\n"
+        "Rules:\n"
+        "- Respond with ONLY the value, nothing else. No explanation, no quotes, no prefix.\n"
+        "- If you cannot determine the value with reasonable confidence, respond with exactly: UNKNOWN\n"
+        f"- The column type is \"{request.column_type}\", so respond with an appropriate value for that type.\n"
+        "- For date/datetime types, use ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS).\n"
+        "- For boolean types, respond with true or false.\n"
+        "- For number/currency types, respond with just the number.\n"
+        "- For rating types, respond with a number.\n"
+    )
+
+    user_message = (
+        f"Here is an item from the list \"{request.list_name}\":\n"
+        f"{item_context_str}\n\n"
+        f"What should the value of \"{request.target_column}\" be?"
+    )
+
+    payload = {
+        "systemInstruction": {"parts": [{"text": system_instruction}]},
+        "contents": [{"role": "user", "parts": [{"text": user_message}]}],
+        "generationConfig": {"candidateCount": 1, "temperature": 0.1},
+    }
+
+    log.info(
+        "COMPLETION REQUEST  list=%r  column=%r  model=%s",
+        request.list_name, request.target_column, model_name,
+    )
+    log.debug("COMPLETION CONTEXT:\n%s", item_context_str)
+
+    url = f"{GEMINI_BASE_URL}/models/{model_name}:generateContent"
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(url, params={"key": api_key}, json=payload)
+
+        if resp.status_code == 401 or resp.status_code == 403:
+            raise HTTPException(status_code=401, detail="Invalid Gemini API key.")
+
+        if resp.status_code != 200:
+            error_msg = resp.text[:300]
+            log.error("COMPLETION ERROR %d  model=%s  body=%s", resp.status_code, model_name, error_msg)
+            raise HTTPException(status_code=500, detail=f"Gemini API error ({resp.status_code})")
+
+        data = resp.json()
+        text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+
+        log.info("COMPLETION RESPONSE  column=%r  value=%r  model=%s", request.target_column, text, model_name)
+
+        if text.upper() == "UNKNOWN":
+            return CompletionResponse(value=None, model=model_name)
+
+        return CompletionResponse(value=text, model=model_name)
+
+    except httpx.TimeoutException:
+        log.error("COMPLETION TIMEOUT  model=%s", model_name)
+        raise HTTPException(status_code=504, detail="Request to Gemini timed out.")
+    except httpx.RequestError as e:
+        log.error("COMPLETION NETWORK ERROR  model=%s  error=%s", model_name, str(e))
+        raise HTTPException(status_code=502, detail=f"Network error: {str(e)}")
+

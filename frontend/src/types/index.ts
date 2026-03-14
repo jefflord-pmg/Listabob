@@ -117,6 +117,19 @@ export interface GeminiModel {
   name: string;
 }
 
+export interface CompletionRequest {
+  list_name: string;
+  item_context: Record<string, unknown>;
+  target_column: string;
+  column_type: string;
+  model?: string;
+}
+
+export interface CompletionResponse {
+  value: string | null;
+  model: string;
+}
+
 export interface RecycleBinItem {
   id: string;
   list_id: string;
