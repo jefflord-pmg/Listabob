@@ -130,6 +130,19 @@ export interface CompletionResponse {
   model: string;
 }
 
+export interface BatchCompletionRequest {
+  list_name: string;
+  items: Array<{ item_context: Record<string, unknown> }>;
+  target_column: string;
+  column_type: string;
+  model?: string;
+}
+
+export interface BatchCompletionResponse {
+  values: (string | null)[];
+  model: string;
+}
+
 export interface RecycleBinItem {
   id: string;
   list_id: string;

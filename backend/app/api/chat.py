@@ -266,3 +266,118 @@ async def complete_column_value(request: CompletionRequest):
         log.error("COMPLETION NETWORK ERROR  model=%s  error=%s", model_name, str(e))
         raise HTTPException(status_code=502, detail=f"Network error: {str(e)}")
 
+
+class BatchCompletionRequest(BaseModel):
+    list_name: str
+    items: list[dict]  # each: { "item_context": {col_name: value, ...} }
+    target_column: str
+    column_type: str
+    model: str | None = None
+
+
+class BatchCompletionResponse(BaseModel):
+    values: list[str | None]  # one entry per item, None = unknown
+    model: str
+
+
+@router.post("/complete-batch", response_model=BatchCompletionResponse)
+async def complete_column_batch(request: BatchCompletionRequest):
+    """Use AI to fill a column for multiple items in a single API call."""
+    config = get_config()
+    api_key = config.get("gemini_api_key")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="Gemini API key not configured. Please set it in System Settings.")
+
+    if not request.items:
+        raise HTTPException(status_code=400, detail="No items provided.")
+
+    model_name = request.model or config.get("gemini_model") or "gemini-2.0-flash"
+    n = len(request.items)
+
+    system_instruction = (
+        f"You are a data completion assistant for a list called \"{request.list_name}\".\n\n"
+        f"You will be given {n} item(s). For each one, determine the most likely value for "
+        f"the \"{request.target_column}\" column (type: {request.column_type}).\n\n"
+        "Rules:\n"
+        f"- Respond with ONLY a valid JSON array of exactly {n} value(s), one per item, in order.\n"
+        "- Use null (JSON null, not the string 'null') for any item where you cannot determine the value.\n"
+        "- No explanation, no markdown fences, no extra text — just the JSON array.\n"
+        "- For date/datetime types, use ISO format (YYYY-MM-DD).\n"
+        "- For boolean types, use JSON true or false (not strings).\n"
+        "- For number/currency/rating types, use a JSON number.\n"
+        f"Example for {n} item(s): {repr([None] * n).replace('None', 'null')}\n"
+    )
+
+    # Build the user message listing all items
+    item_blocks = []
+    for i, item in enumerate(request.items, 1):
+        lines = [f"Item {i}:"]
+        for col_name, value in item.get("item_context", {}).items():
+            lines.append(f"  {col_name}: {value}")
+        item_blocks.append("\n".join(lines))
+
+    user_message = (
+        f"Here are {n} items from \"{request.list_name}\".\n"
+        f"What should the \"{request.target_column}\" value be for each one?\n\n"
+        + "\n\n".join(item_blocks)
+    )
+
+    payload = {
+        "systemInstruction": {"parts": [{"text": system_instruction}]},
+        "contents": [{"role": "user", "parts": [{"text": user_message}]}],
+        "generationConfig": {"candidateCount": 1, "temperature": 0.1},
+    }
+
+    log.info(
+        "BATCH COMPLETION REQUEST  list=%r  column=%r  batch_size=%d  model=%s",
+        request.list_name, request.target_column, n, model_name,
+    )
+    log.debug("BATCH USER MESSAGE:\n%s", user_message)
+
+    url = f"{GEMINI_BASE_URL}/models/{model_name}:generateContent"
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(url, params={"key": api_key}, json=payload)
+
+        if resp.status_code == 401 or resp.status_code == 403:
+            raise HTTPException(status_code=401, detail="Invalid Gemini API key.")
+
+        if resp.status_code != 200:
+            error_msg = resp.text[:300]
+            log.error("BATCH COMPLETION ERROR %d  model=%s  body=%s", resp.status_code, model_name, error_msg)
+            raise HTTPException(status_code=500, detail=f"Gemini API error ({resp.status_code})")
+
+        data = resp.json()
+        raw = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+
+        log.info("BATCH COMPLETION RESPONSE  column=%r  model=%s  raw=%r", request.target_column, model_name, raw[:200])
+
+        # Parse the JSON array from the response
+        try:
+            import json as jsonlib
+            # Strip markdown fences if the model adds them despite instructions
+            clean = raw.strip()
+            if clean.startswith("```"):
+                clean = "\n".join(clean.split("\n")[1:])
+            if clean.endswith("```"):
+                clean = "\n".join(clean.split("\n")[:-1])
+            values = jsonlib.loads(clean.strip())
+            if not isinstance(values, list):
+                raise ValueError("Response is not a JSON array")
+            # Normalise: pad or trim to match n items, convert non-None to str
+            values = values[:n] + [None] * max(0, n - len(values))
+            normalised = [str(v) if v is not None else None for v in values]
+        except Exception as parse_err:
+            log.error("BATCH COMPLETION PARSE ERROR  raw=%r  err=%s", raw[:200], parse_err)
+            raise HTTPException(status_code=500, detail=f"Could not parse model response as JSON array: {raw[:100]}")
+
+        return BatchCompletionResponse(values=normalised, model=model_name)
+
+    except httpx.TimeoutException:
+        log.error("BATCH COMPLETION TIMEOUT  model=%s", model_name)
+        raise HTTPException(status_code=504, detail="Request to Gemini timed out.")
+    except httpx.RequestError as e:
+        log.error("BATCH COMPLETION NETWORK ERROR  model=%s  error=%s", model_name, str(e))
+        raise HTTPException(status_code=502, detail=f"Network error: {str(e)}")
+

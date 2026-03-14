@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import { useSettings } from '../../contexts/SettingsContext';
+import { chatApi } from '../../api/chat';
+import type { GeminiModel } from '../../types';
 
 interface SystemStats {
   total_lists: number;
@@ -38,6 +40,8 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [geminiModel, setGeminiModel] = useState('');
   const [geminiSystemPrompt, setGeminiSystemPrompt] = useState('');
+  const [availableModels, setAvailableModels] = useState<GeminiModel[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -70,9 +74,25 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
         if (data.gemini_api_key) setGeminiApiKey(data.gemini_api_key);
         if (data.gemini_model) setGeminiModel(data.gemini_model);
         if (data.gemini_system_prompt) setGeminiSystemPrompt(data.gemini_system_prompt);
+        // Fetch models if a key is already saved
+        if (data.gemini_api_key) {
+          fetchModels();
+        }
       }
     } catch (err) {
       console.error('Failed to fetch config:', err);
+    }
+  };
+
+  const fetchModels = async () => {
+    setLoadingModels(true);
+    try {
+      const models = await chatApi.getModels();
+      setAvailableModels(models);
+    } catch {
+      setAvailableModels([]);
+    } finally {
+      setLoadingModels(false);
     }
   };
 
@@ -211,6 +231,10 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
       });
       if (response.ok) {
         setSuccess('AI settings saved');
+        // Reload models with the (possibly new) key
+        if (geminiApiKey) {
+          fetchModels();
+        }
       } else {
         setError('Failed to save AI settings');
       }
@@ -371,7 +395,10 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
                 className="input input-bordered w-full"
                 placeholder="Enter your Google Gemini API key"
                 value={geminiApiKey}
-                onChange={(e) => setGeminiApiKey(e.target.value)}
+                onChange={(e) => {
+                  setGeminiApiKey(e.target.value);
+                  setAvailableModels([]); // clear so user can reload after changing key
+                }}
               />
               <label className="label">
                 <span className="label-text-alt text-base-content/60">
@@ -386,13 +413,44 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
               <label className="label">
                 <span className="label-text">Default Model</span>
               </label>
-              <input
-                type="text"
-                className="input input-bordered w-full"
-                placeholder="e.g. gemini-2.0-flash (leave empty for default)"
-                value={geminiModel}
-                onChange={(e) => setGeminiModel(e.target.value)}
-              />
+              {loadingModels ? (
+                <div className="flex items-center gap-2">
+                  <span className="loading loading-spinner loading-sm"></span>
+                  <span className="text-sm text-base-content/60">Loading models...</span>
+                </div>
+              ) : availableModels.length > 0 ? (
+                <select
+                  className="select select-bordered w-full"
+                  value={geminiModel}
+                  onChange={(e) => setGeminiModel(e.target.value)}
+                >
+                  <option value="">Default (gemini-2.0-flash)</option>
+                  {availableModels.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    className="input input-bordered flex-1"
+                    placeholder="e.g. gemini-2.0-flash"
+                    value={geminiModel}
+                    onChange={(e) => setGeminiModel(e.target.value)}
+                  />
+                  {geminiApiKey && (
+                    <button
+                      className="btn btn-ghost btn-sm self-center"
+                      onClick={fetchModels}
+                      title="Load models"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              )}
               <label className="label">
                 <span className="label-text-alt text-base-content/60">
                   You can also select a model in the chat modal

@@ -22,6 +22,14 @@ interface ItemResult {
   error?: string;
 }
 
+const BATCH_OPTIONS = [
+  { label: '1 — one at a time', value: 1 },
+  { label: '5', value: 5 },
+  { label: '10', value: 10 },
+  { label: '25', value: 25 },
+  { label: 'All at once', value: 0 },
+];
+
 export function AICompletionModal({ isOpen, onClose, listId, listName, columns, items }: AICompletionModalProps) {
   const queryClient = useQueryClient();
   const [selectedColumnId, setSelectedColumnId] = useState('');
@@ -29,23 +37,21 @@ export function AICompletionModal({ isOpen, onClose, listId, listName, columns, 
   const [selectedModel, setSelectedModel] = useState('');
   const [loadingModels, setLoadingModels] = useState(false);
   const [skipExisting, setSkipExisting] = useState(true);
+  const [batchSize, setBatchSize] = useState(10);
   const [isRunning, setIsRunning] = useState(false);
   const [results, setResults] = useState<ItemResult[]>([]);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const abortRef = useRef(false);
   const resultsEndRef = useRef<HTMLDivElement>(null);
 
-  // Only show non-deleted items
   const activeItems = items.filter(i => !i.deleted_at);
 
-  // Fetch models on open
   useEffect(() => {
     if (isOpen && models.length === 0) {
       fetchModels();
     }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reset when closing
   useEffect(() => {
     if (!isOpen) {
       setSelectedColumnId('');
@@ -56,7 +62,6 @@ export function AICompletionModal({ isOpen, onClose, listId, listName, columns, 
     }
   }, [isOpen]);
 
-  // Scroll results to bottom
   useEffect(() => {
     resultsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [results]);
@@ -77,20 +82,30 @@ export function AICompletionModal({ isOpen, onClose, listId, listName, columns, 
         }
       }
     } catch {
-      // Models will be empty, user can type manually
+      // silently fall back to text input
     } finally {
       setLoadingModels(false);
     }
   };
 
   const getItemLabel = useCallback((item: Item): string => {
-    // Use first column's value as the label
     const firstCol = columns[0];
     if (firstCol && item.values[firstCol.id] != null) {
       return String(item.values[firstCol.id]);
     }
     return `Item ${item.id.slice(0, 8)}`;
   }, [columns]);
+
+  const buildItemContext = (item: Item, targetColId: string): Record<string, unknown> => {
+    const ctx: Record<string, unknown> = {};
+    for (const col of columns) {
+      const val = item.values[col.id];
+      if (val != null && val !== '' && col.id !== targetColId) {
+        ctx[col.name] = val;
+      }
+    }
+    return ctx;
+  };
 
   const handleStart = async () => {
     const targetCol = columns.find(c => c.id === selectedColumnId);
@@ -115,87 +130,112 @@ export function AICompletionModal({ isOpen, onClose, listId, listName, columns, 
     const itemsToProcess = initialResults.filter(r => r.status === 'pending');
     setProgress({ done: 0, total: itemsToProcess.length });
 
+    // Resolve effective batch size
+    const effectiveBatchSize = batchSize === 0 ? itemsToProcess.length : batchSize;
+
     let doneCount = 0;
 
-    for (const result of initialResults) {
+    // Process in batches
+    for (let i = 0; i < itemsToProcess.length; i += effectiveBatchSize) {
       if (abortRef.current) break;
-      if (result.status === 'skipped') continue;
 
-      // Mark as processing
+      const batchResults = itemsToProcess.slice(i, i + effectiveBatchSize);
+
+      // Mark entire batch as processing
       setResults(prev => prev.map(r =>
-        r.itemId === result.itemId ? { ...r, status: 'processing' } : r
+        batchResults.some(b => b.itemId === r.itemId) ? { ...r, status: 'processing' } : r
       ));
 
-      const item = activeItems.find(i => i.id === result.itemId)!;
-
-      // Build context: column_name -> value for non-empty columns
-      const itemContext: Record<string, unknown> = {};
-      for (const col of columns) {
-        const val = item.values[col.id];
-        if (val != null && val !== '' && col.id !== targetCol.id) {
-          itemContext[col.name] = val;
+      if (effectiveBatchSize === 1) {
+        // Single-item path — use original endpoint
+        const result = batchResults[0];
+        const item = activeItems.find(it => it.id === result.itemId)!;
+        try {
+          const response = await chatApi.completeColumn({
+            list_name: listName,
+            item_context: buildItemContext(item, targetCol.id),
+            target_column: targetCol.name,
+            column_type: targetCol.column_type,
+            model: selectedModel || undefined,
+          });
+          if (abortRef.current) break;
+          if (response.value != null) {
+            await itemsApi.update(listId, item.id, { values: { ...item.values, [targetCol.id]: response.value } });
+            setResults(prev => prev.map(r =>
+              r.itemId === result.itemId ? { ...r, status: 'success', value: response.value } : r
+            ));
+          } else {
+            setResults(prev => prev.map(r =>
+              r.itemId === result.itemId ? { ...r, status: 'skipped', value: 'UNKNOWN' } : r
+            ));
+          }
+        } catch (err: unknown) {
+          const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed';
+          setResults(prev => prev.map(r =>
+            r.itemId === result.itemId ? { ...r, status: 'error', error: message } : r
+          ));
         }
-      }
-
-      try {
-        const response = await chatApi.completeColumn({
-          list_name: listName,
-          item_context: itemContext,
-          target_column: targetCol.name,
-          column_type: targetCol.column_type,
-          model: selectedModel || undefined,
+        doneCount++;
+      } else {
+        // Batch path
+        const batchItems = batchResults.map(r => {
+          const item = activeItems.find(it => it.id === r.itemId)!;
+          return { item_context: buildItemContext(item, targetCol.id) };
         });
 
-        if (abortRef.current) break;
+        try {
+          const response = await chatApi.completeColumnBatch({
+            list_name: listName,
+            items: batchItems,
+            target_column: targetCol.name,
+            column_type: targetCol.column_type,
+            model: selectedModel || undefined,
+          });
 
-        if (response.value != null) {
-          // Update the item via the API
-          const newValues = { ...item.values, [targetCol.id]: response.value };
-          await itemsApi.update(listId, item.id, { values: newValues });
+          if (abortRef.current) break;
 
+          // Apply each value and update items
+          await Promise.all(
+            batchResults.map(async (result, idx) => {
+              const value = response.values[idx] ?? null;
+              const item = activeItems.find(it => it.id === result.itemId)!;
+              if (value != null) {
+                await itemsApi.update(listId, item.id, { values: { ...item.values, [targetCol.id]: value } });
+                setResults(prev => prev.map(r =>
+                  r.itemId === result.itemId ? { ...r, status: 'success', value } : r
+                ));
+              } else {
+                setResults(prev => prev.map(r =>
+                  r.itemId === result.itemId ? { ...r, status: 'skipped', value: 'UNKNOWN' } : r
+                ));
+              }
+            })
+          );
+        } catch (err: unknown) {
+          const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed';
           setResults(prev => prev.map(r =>
-            r.itemId === result.itemId
-              ? { ...r, status: 'success', value: response.value }
-              : r
-          ));
-        } else {
-          setResults(prev => prev.map(r =>
-            r.itemId === result.itemId
-              ? { ...r, status: 'skipped', value: 'UNKNOWN' }
-              : r
+            batchResults.some(b => b.itemId === r.itemId) ? { ...r, status: 'error', error: message } : r
           ));
         }
-      } catch (err: unknown) {
-        const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-          || 'Failed';
-        setResults(prev => prev.map(r =>
-          r.itemId === result.itemId
-            ? { ...r, status: 'error', error: message }
-            : r
-        ));
+        doneCount += batchResults.length;
       }
 
-      doneCount++;
       setProgress({ done: doneCount, total: itemsToProcess.length });
     }
 
-    // Refresh the items list to show updates
     queryClient.invalidateQueries({ queryKey: ['items', listId] });
     setIsRunning(false);
   };
 
-  const handleStop = () => {
-    abortRef.current = true;
-  };
+  const handleStop = () => { abortRef.current = true; };
 
   const selectedColumn = columns.find(c => c.id === selectedColumnId);
   const itemsWithExisting = selectedColumnId
-    ? activeItems.filter(i => {
-        const v = i.values[selectedColumnId];
-        return v != null && v !== '';
-      }).length
+    ? activeItems.filter(i => { const v = i.values[selectedColumnId]; return v != null && v !== ''; }).length
     : 0;
-  const itemsToFill = activeItems.length - itemsWithExisting;
+  const itemsToFill = activeItems.length - (skipExisting ? itemsWithExisting : 0);
+  const effectiveBatch = batchSize === 0 ? itemsToFill : batchSize;
+  const estimatedCalls = itemsToFill > 0 ? Math.ceil(itemsToFill / effectiveBatch) : 0;
 
   return (
     <Modal
@@ -261,9 +301,9 @@ export function AICompletionModal({ isOpen, onClose, listId, listName, columns, 
           )}
         </div>
 
-        {/* Options */}
-        <div className="form-control">
-          <label className="label cursor-pointer justify-start gap-3">
+        {/* Options row */}
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="label cursor-pointer gap-2 p-0">
             <input
               type="checkbox"
               className="checkbox checkbox-sm"
@@ -271,9 +311,31 @@ export function AICompletionModal({ isOpen, onClose, listId, listName, columns, 
               onChange={(e) => setSkipExisting(e.target.checked)}
               disabled={isRunning}
             />
-            <span className="label-text">Skip items that already have a value</span>
+            <span className="label-text">Skip items with existing values</span>
           </label>
+
+          <div className="flex items-center gap-2 ml-auto">
+            <span className="text-sm label-text font-medium">Batch size:</span>
+            <select
+              className="select select-bordered select-sm"
+              value={batchSize}
+              onChange={(e) => setBatchSize(Number(e.target.value))}
+              disabled={isRunning}
+            >
+              {BATCH_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
+
+        {/* Estimate */}
+        {selectedColumn && itemsToFill > 0 && (
+          <p className="text-xs text-base-content/50">
+            {estimatedCalls} API call{estimatedCalls !== 1 ? 's' : ''} to process {itemsToFill} item{itemsToFill !== 1 ? 's' : ''}
+            {batchSize !== 1 ? ` (${effectiveBatch} items per request)` : ''}
+          </p>
+        )}
 
         {/* Progress */}
         {results.length > 0 && (
@@ -352,4 +414,22 @@ export function AICompletionModal({ isOpen, onClose, listId, listName, columns, 
       </div>
     </Modal>
   );
+}
+
+
+interface AICompletionModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  listId: string;
+  listName: string;
+  columns: Column[];
+  items: Item[];
+}
+
+interface ItemResult {
+  itemId: string;
+  label: string;
+  status: 'pending' | 'processing' | 'success' | 'skipped' | 'error';
+  value?: string | null;
+  error?: string;
 }
