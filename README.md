@@ -225,11 +225,6 @@ Listabob/
 ## Wish List
 
 Future enhancements planned for Listabob:
-
-- **Clear Search on ESC** - Press ESC to clear the search input box
-- **AI Completion Prompt Enhancement** - Add a text input in the AI completion modal for custom prompt text
-- **AI Completion Options** - Add option to include/exclude the current column value when sending completion requests. For instance, if we are updating a column called "genre" don't send the current value for that if the option is set to exclude current value.
-- **Settings Modal Redesign** - Convert system settings modal to tabbed layout to reduce height
 - **Custom AI Providers** - Support for custom OpenAI-compatible providers with configurable:
   - Base URL
   - API Key
