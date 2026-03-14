@@ -3,11 +3,14 @@ from pydantic import BaseModel
 import json
 from pathlib import Path
 import sys
+import httpx
 
 from app.logger import get_logger
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 log = get_logger("listabob.chat")
+
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
 
 def get_base_dir() -> Path:
@@ -56,76 +59,86 @@ async def chat_with_item(request: ChatRequest):
 
     model_name = request.model or config.get("gemini_model") or "gemini-2.0-flash"
 
+    # Build item context string
+    context_lines = []
+    for col_name, value in request.item_context.items():
+        context_lines.append(f"  {col_name}: {value}")
+    item_context_str = "\n".join(context_lines)
+
+    # Use configurable system prompt or default
+    DEFAULT_SYSTEM_PROMPT = (
+        "You are a helpful assistant. The user is asking about a specific item "
+        "from their list management app.\n\n"
+        "List: {list_name}\n"
+        "Item data:\n{item_context_str}\n\n"
+        "Answer the user's questions about this item. Be concise and helpful. "
+        "If the user asks something unrelated to the item, you can still help "
+        "but keep the item context in mind."
+    )
+    prompt_template = config.get("gemini_system_prompt") or DEFAULT_SYSTEM_PROMPT
+    system_instruction = prompt_template.replace(
+        "{list_name}", request.list_name
+    ).replace(
+        "{item_context_str}", item_context_str
+    )
+
+    # Build Gemini REST payload
+    # All messages except the last go into contents history
+    contents = []
+    for msg in request.messages[:-1]:
+        role = "user" if msg.role == "user" else "model"
+        contents.append({"role": role, "parts": [{"text": msg.content}]})
+
+    last_message = request.messages[-1].content if request.messages else ""
+    contents.append({"role": "user", "parts": [{"text": last_message}]})
+
+    payload = {
+        "systemInstruction": {"parts": [{"text": system_instruction}]},
+        "contents": contents,
+        "generationConfig": {"candidateCount": 1},
+    }
+
+    log.info(
+        "CHAT REQUEST  list=%r  model=%s  history_turns=%d",
+        request.list_name, model_name, len(contents) - 1,
+    )
+    log.debug("SYSTEM PROMPT:\n%s", system_instruction)
+    log.debug("USER MESSAGE:\n%s", last_message)
+
+    url = f"{GEMINI_BASE_URL}/models/{model_name}:generateContent"
+
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(url, params={"key": api_key}, json=payload)
 
-        # Build item context string
-        context_lines = []
-        for col_name, value in request.item_context.items():
-            context_lines.append(f"  {col_name}: {value}")
-        item_context_str = "\n".join(context_lines)
+        if resp.status_code == 400:
+            detail = resp.json().get("error", {}).get("message", "Bad request")
+            log.error("CHAT ERROR 400  model=%s  detail=%s", model_name, detail)
+            raise HTTPException(status_code=400, detail=detail)
 
-        # Use configurable system prompt or default
-        DEFAULT_SYSTEM_PROMPT = (
-            "You are a helpful assistant. The user is asking about a specific item "
-            "from their list management app.\n\n"
-            "List: {list_name}\n"
-            "Item data:\n{item_context_str}\n\n"
-            "Answer the user's questions about this item. Be concise and helpful. "
-            "If the user asks something unrelated to the item, you can still help "
-            "but keep the item context in mind."
-        )
-        prompt_template = config.get("gemini_system_prompt") or DEFAULT_SYSTEM_PROMPT
-        system_instruction = prompt_template.replace(
-            "{list_name}", request.list_name
-        ).replace(
-            "{item_context_str}", item_context_str
-        )
-
-        model = genai.GenerativeModel(
-            model_name=model_name,
-            system_instruction=system_instruction,
-        )
-
-        # Build conversation history for Gemini
-        history = []
-        for msg in request.messages[:-1]:  # All except the last (current) message
-            role = "user" if msg.role == "user" else "model"
-            history.append({"role": role, "parts": [msg.content]})
-
-        chat = model.start_chat(history=history)
-
-        # Send the latest user message
-        last_message = request.messages[-1].content if request.messages else ""
-
-        # Log what we're about to send
-        log.info(
-            "CHAT REQUEST  list=%r  model=%s  history_turns=%d",
-            request.list_name, model_name, len(history),
-        )
-        log.debug("SYSTEM PROMPT:\n%s", system_instruction)
-        log.debug("USER MESSAGE:\n%s", last_message)
-
-        response = chat.send_message(last_message)
-
-        log.info("CHAT RESPONSE  model=%s  chars=%d", model_name, len(response.text))
-        log.debug("ASSISTANT RESPONSE:\n%s", response.text)
-
-        return ChatResponse(
-            message=response.text,
-            model=model_name,
-        )
-
-    except ImportError:
-        log.error("google-generativeai package is not installed")
-        raise HTTPException(status_code=500, detail="google-generativeai package is not installed.")
-    except Exception as e:
-        error_msg = str(e)
-        log.error("CHAT ERROR  list=%r  model=%s  error=%s", request.list_name, model_name, error_msg)
-        if "API_KEY_INVALID" in error_msg or "PERMISSION_DENIED" in error_msg:
+        if resp.status_code == 401 or resp.status_code == 403:
+            log.error("CHAT ERROR auth  model=%s  status=%d", model_name, resp.status_code)
             raise HTTPException(status_code=401, detail="Invalid Gemini API key. Please check your key in System Settings.")
-        raise HTTPException(status_code=500, detail=f"Gemini API error: {error_msg}")
+
+        if resp.status_code != 200:
+            error_msg = resp.text[:300]
+            log.error("CHAT ERROR %d  model=%s  body=%s", resp.status_code, model_name, error_msg)
+            raise HTTPException(status_code=500, detail=f"Gemini API error ({resp.status_code}): {error_msg}")
+
+        data = resp.json()
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+
+        log.info("CHAT RESPONSE  model=%s  chars=%d", model_name, len(text))
+        log.debug("ASSISTANT RESPONSE:\n%s", text)
+
+        return ChatResponse(message=text, model=model_name)
+
+    except httpx.TimeoutException:
+        log.error("CHAT TIMEOUT  model=%s", model_name)
+        raise HTTPException(status_code=504, detail="Request to Gemini timed out.")
+    except httpx.RequestError as e:
+        log.error("CHAT NETWORK ERROR  model=%s  error=%s", model_name, str(e))
+        raise HTTPException(status_code=502, detail=f"Network error reaching Gemini: {str(e)}")
 
 
 @router.get("/models", response_model=list[GeminiModelInfo])
@@ -136,21 +149,26 @@ async def list_gemini_models():
     if not api_key:
         raise HTTPException(status_code=400, detail="Gemini API key not configured.")
 
-    try:
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
+    url = f"{GEMINI_BASE_URL}/models"
 
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url, params={"key": api_key})
+
+        if resp.status_code != 200:
+            raise HTTPException(status_code=resp.status_code, detail=f"Failed to list models: {resp.text[:200]}")
+
+        data = resp.json()
         models = []
-        for model in genai.list_models():
-            if "generateContent" in (model.supported_generation_methods or []):
-                model_id = model.name.replace("models/", "")
+        for m in data.get("models", []):
+            if "generateContent" in m.get("supportedGenerationMethods", []):
+                model_id = m["name"].replace("models/", "")
                 models.append(GeminiModelInfo(
                     id=model_id,
-                    name=model.display_name or model_id,
+                    name=m.get("displayName") or model_id,
                 ))
         return models
 
-    except ImportError:
-        raise HTTPException(status_code=500, detail="google-generativeai package is not installed.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list models: {str(e)}")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail=f"Network error: {str(e)}")
+
