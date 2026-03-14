@@ -38,11 +38,22 @@ A flexible list management web app for organizing data in customizable tables wi
 - **Accessible Modals** - Full keyboard navigation, focus management, and screen reader support
 - **Item Count** - Always visible count of items (with filtered count when filtering)
 
+### Data Integrity
+- **Recycle Bin** - Deleted items are soft-deleted and can be restored from the recycle bin
+- **Undo Support** - Recover deleted data without permanent loss
+
+### AI Features
+- **AI Completion** - Auto-fill cells using AI-powered suggestions
+- **Batch Completion** - Apply AI completions to multiple cells at once
+- **Chat Integration** - Chat with AI for data insights and assistance
+- **Configurable AI Model** - Use Gemini API with custom prompts
+
 ### Other Features
 - **Rename Lists** - Update list names from the menu
 - **Delete Lists** - Remove lists with confirmation
 - **New Row Visibility** - Newly added rows appear at the bottom and are highlighted
 - **Persistent Views** - Sort order, column positions, and filters are saved automatically
+- **Offline Support** - PWA functionality for improved performance and offline capabilities
 
 ## Tech Stack
 
@@ -156,35 +167,69 @@ The app will be available at `http://localhost:5173`
 Listabob/
 ├── backend/
 │   ├── app/
-│   │   ├── api/          # API route handlers
-│   │   │   ├── lists.py
-│   │   │   ├── items.py
-│   │   │   ├── views.py
-│   │   │   ├── imports.py
-│   │   │   └── exports.py
-│   │   ├── models/       # SQLAlchemy models
-│   │   ├── schemas/      # Pydantic schemas
-│   │   ├── main.py       # FastAPI application
-│   │   └── database.py   # Database configuration
-│   └── requirements.txt
+│   │   ├── api/              # API route handlers
+│   │   │   ├── auth.py       # Authentication endpoints
+│   │   │   ├── chat.py       # Chat/AI endpoints
+│   │   │   ├── exports.py    # CSV export endpoints
+│   │   │   ├── imports.py    # CSV import endpoints
+│   │   │   ├── items.py      # Item/row management
+│   │   │   ├── lists.py      # List management
+│   │   │   ├── system.py     # System/config endpoints
+│   │   │   ├── templates.py  # Template endpoints
+│   │   │   └── views.py      # View management
+│   │   ├── models/           # SQLAlchemy ORM models
+│   │   ├── schemas/          # Pydantic request/response schemas
+│   │   ├── services/         # Business logic services
+│   │   ├── utils/            # Utility functions
+│   │   ├── config.py         # Configuration loader
+│   │   ├── database.py       # Database connection/session
+│   │   ├── logger.py         # Logging configuration
+│   │   ├── main.py           # FastAPI application setup
+│   │   ├── migrations.py     # Database migrations
+│   │   └── __init__.py
+│   ├── requirements.txt
+│   └── run_standalone.py     # Entry point for standalone executable
 ├── frontend/
 │   ├── src/
-│   │   ├── api/          # API client functions
+│   │   ├── api/              # API client functions
 │   │   ├── components/
-│   │   │   ├── cells/    # Cell editor components
-│   │   │   ├── columns/  # Column management components
-│   │   │   ├── import/   # CSV import components
-│   │   │   ├── layout/   # Layout components (Sidebar, etc.)
-│   │   │   ├── list/     # List-related components
-│   │   │   ├── ui/       # Reusable UI components (Modal, etc.)
-│   │   │   └── views/    # View components (GridView, FilterPanel)
-│   │   ├── hooks/        # Custom React hooks
-│   │   ├── pages/        # Page components
-│   │   └── types/        # TypeScript types
-│   └── package.json
-├── data/                 # SQLite database location
+│   │   │   ├── cells/        # Cell editor components
+│   │   │   ├── columns/      # Column management components
+│   │   │   ├── import/       # CSV import components
+│   │   │   ├── layout/       # Layout components (Sidebar, etc.)
+│   │   │   ├── list/         # List-related components
+│   │   │   ├── ui/           # Reusable UI components (Modal, etc.)
+│   │   │   └── views/        # View components (GridView, FilterPanel)
+│   │   ├── contexts/         # React Context providers (Auth, Settings)
+│   │   ├── hooks/            # Custom React hooks (TanStack Query integrations)
+│   │   ├── pages/            # Page components
+│   │   ├── types/            # TypeScript type definitions
+│   │   ├── assets/           # Static assets (images, icons, etc.)
+│   │   ├── App.tsx           # Root React component
+│   │   ├── main.tsx          # Application entry point
+│   │   └── index.css         # Global styles
+│   ├── package.json
+│   └── vite.config.ts        # Vite configuration
+├── data/                     # SQLite database location (generated at runtime)
+├── build.bat                 # Build script for standalone executable
+├── listabob.spec             # PyInstaller configuration
+├── config.json               # Configuration file (gitignored)
+├── config.example.json       # Example configuration
 └── README.md
 ```
+
+## Wish List
+
+Future enhancements planned for Listabob:
+
+- **Clear Search on ESC** - Press ESC to clear the search input box
+- **AI Completion Prompt Enhancement** - Add a text input in the AI completion modal for custom prompt text
+- **AI Completion Options** - Add option to include/exclude the current column value when sending completion requests. For instance, if we are updating a column called "genre" don't send the current value for that if the option is set to exclude current value.
+- **Settings Modal Redesign** - Convert system settings modal to tabbed layout to reduce height
+- **Custom AI Providers** - Support for custom OpenAI-compatible providers with configurable:
+  - Base URL
+  - API Key
+  - Model ID/Name
 
 ## Building & Releases
 
