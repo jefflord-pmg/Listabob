@@ -122,6 +122,7 @@ export interface CompletionRequest {
   item_context: Record<string, unknown>;
   target_column: string;
   column_type: string;
+  column_config?: Record<string, unknown> | null;
   model?: string;
 }
 
@@ -135,6 +136,7 @@ export interface BatchCompletionRequest {
   items: Array<{ item_context: Record<string, unknown> }>;
   target_column: string;
   column_type: string;
+  column_config?: Record<string, unknown> | null;
   model?: string;
 }
 

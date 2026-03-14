@@ -178,6 +178,7 @@ class CompletionRequest(BaseModel):
     item_context: dict  # column_name -> value for all existing data
     target_column: str
     column_type: str
+    column_config: dict | None = None  # e.g. {"choices": [...]} for choice columns
     model: str | None = None
 
 
@@ -202,6 +203,14 @@ async def complete_column_value(request: CompletionRequest):
         context_lines.append(f"  {col_name}: {value}")
     item_context_str = "\n".join(context_lines)
 
+    # Build choice hints if applicable
+    choice_hint = ""
+    if request.column_type in ("choice", "multiple_choice") and request.column_config:
+        choices = request.column_config.get("choices", [])
+        if choices:
+            choice_hint = f"- Known options for this column: {', '.join(str(c) for c in choices)}\n"
+            choice_hint += "  You may also suggest a new option if none of the existing ones fit.\n"
+
     system_instruction = (
         "You are a data completion assistant. The user has a list called "
         f"\"{request.list_name}\" with items that have various columns.\n\n"
@@ -215,6 +224,8 @@ async def complete_column_value(request: CompletionRequest):
         "- For boolean types, respond with true or false.\n"
         "- For number/currency types, respond with just the number.\n"
         "- For rating types, respond with a number.\n"
+        "- For multiple_choice types, respond with a comma-separated list of values (e.g. Action,Drama,Thriller).\n"
+        + choice_hint
     )
 
     user_message = (
@@ -435,6 +446,7 @@ class BatchCompletionRequest(BaseModel):
     items: list[dict]  # each: { "item_context": {col_name: value, ...} }
     target_column: str
     column_type: str
+    column_config: dict | None = None  # e.g. {"choices": [...]} for choice columns
     model: str | None = None
 
 
@@ -457,6 +469,16 @@ async def complete_column_batch(request: BatchCompletionRequest):
     model_name = request.model or config.get("gemini_model") or "gemini-2.0-flash"
     n = len(request.items)
 
+    # Build choice hints if applicable
+    choice_hint = ""
+    if request.column_type in ("choice", "multiple_choice") and request.column_config:
+        choices = request.column_config.get("choices", [])
+        if choices:
+            choice_hint = f"- Known options for this column: {', '.join(str(c) for c in choices)}\n"
+            choice_hint += "  You may also suggest new options if none of the existing ones fit.\n"
+    if request.column_type == "multiple_choice":
+        choice_hint += "- For multiple_choice, return a comma-separated list of values (e.g. Action,Drama,Thriller) as a JSON string.\n"
+
     system_instruction = (
         f"You are a data completion assistant for a list called \"{request.list_name}\".\n\n"
         f"You will be given {n} item(s). For each one, determine the most likely value for "
@@ -468,6 +490,7 @@ async def complete_column_batch(request: BatchCompletionRequest):
         "- For date/datetime types, use ISO format (YYYY-MM-DD).\n"
         "- For boolean types, use JSON true or false (not strings).\n"
         "- For number/currency/rating types, use a JSON number.\n"
+        + choice_hint +
         f"Example for {n} item(s): {repr([None] * n).replace('None', 'null')}\n"
     )
 

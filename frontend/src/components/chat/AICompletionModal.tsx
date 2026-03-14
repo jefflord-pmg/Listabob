@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Modal } from '../ui';
 import { chatApi } from '../../api/chat';
 import { itemsApi } from '../../api/items';
+import { listsApi } from '../../api/lists';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Column, Item, GeminiModel } from '../../types';
 
@@ -111,6 +112,12 @@ export function AICompletionModal({ isOpen, onClose, listId, listName, columns, 
     const targetCol = columns.find(c => c.id === selectedColumnId);
     if (!targetCol) return;
 
+    const isChoiceType = targetCol.column_type === 'choice' || targetCol.column_type === 'multiple_choice';
+    const isMultiChoice = targetCol.column_type === 'multiple_choice';
+
+    // Track current choices (mutable across batches so we can accumulate new ones)
+    const currentChoicesRef = { current: (targetCol.config?.choices as string[] | undefined) ? [...(targetCol.config!.choices as string[])] : [] };
+
     abortRef.current = false;
     setIsRunning(true);
 
@@ -135,6 +142,24 @@ export function AICompletionModal({ isOpen, onClose, listId, listName, columns, 
 
     let doneCount = 0;
 
+    // Helper: ensure new choice values are added to column config
+    const ensureChoices = async (newValues: string[]) => {
+      if (!isChoiceType) return;
+      const existingLower = currentChoicesRef.current.map(c => c.toLowerCase());
+      const toAdd = newValues.filter(v => v && !existingLower.includes(v.toLowerCase()));
+      if (toAdd.length === 0) return;
+      currentChoicesRef.current = [...currentChoicesRef.current, ...toAdd];
+      await listsApi.updateColumn(listId, targetCol.id, {
+        config: { ...targetCol.config, choices: currentChoicesRef.current },
+      });
+    };
+
+    // Helper: encode value for storage
+    const encodeValue = (raw: string): string => {
+      // multiple_choice is stored as comma-separated
+      return raw;
+    };
+
     // Process in batches
     for (let i = 0; i < itemsToProcess.length; i += effectiveBatchSize) {
       if (abortRef.current) break;
@@ -147,7 +172,7 @@ export function AICompletionModal({ isOpen, onClose, listId, listName, columns, 
       ));
 
       if (effectiveBatchSize === 1) {
-        // Single-item path — use original endpoint
+        // Single-item path
         const result = batchResults[0];
         const item = activeItems.find(it => it.id === result.itemId)!;
         try {
@@ -156,13 +181,22 @@ export function AICompletionModal({ isOpen, onClose, listId, listName, columns, 
             item_context: buildItemContext(item, targetCol.id),
             target_column: targetCol.name,
             column_type: targetCol.column_type,
+            column_config: targetCol.config,
             model: selectedModel || undefined,
           });
           if (abortRef.current) break;
           if (response.value != null) {
-            await itemsApi.update(listId, item.id, { values: { ...item.values, [targetCol.id]: response.value } });
+            // Ensure any new choice values are added to the column
+            if (isChoiceType) {
+              const vals = isMultiChoice
+                ? response.value.split(',').map(v => v.trim()).filter(Boolean)
+                : [response.value.trim()];
+              await ensureChoices(vals);
+            }
+            const storeValue = encodeValue(response.value);
+            await itemsApi.update(listId, item.id, { values: { ...item.values, [targetCol.id]: storeValue } });
             setResults(prev => prev.map(r =>
-              r.itemId === result.itemId ? { ...r, status: 'success', value: response.value } : r
+              r.itemId === result.itemId ? { ...r, status: 'success', value: storeValue } : r
             ));
           } else {
             setResults(prev => prev.map(r =>
@@ -189,10 +223,25 @@ export function AICompletionModal({ isOpen, onClose, listId, listName, columns, 
             items: batchItems,
             target_column: targetCol.name,
             column_type: targetCol.column_type,
+            column_config: targetCol.config,
             model: selectedModel || undefined,
           });
 
           if (abortRef.current) break;
+
+          // Collect all new choice values from the whole batch first, then update once
+          if (isChoiceType) {
+            const allVals: string[] = [];
+            response.values.forEach(v => {
+              if (v == null) return;
+              if (isMultiChoice) {
+                v.split(',').map(s => s.trim()).filter(Boolean).forEach(s => allVals.push(s));
+              } else {
+                allVals.push(v.trim());
+              }
+            });
+            await ensureChoices(allVals);
+          }
 
           // Apply each value and update items
           await Promise.all(
@@ -200,9 +249,10 @@ export function AICompletionModal({ isOpen, onClose, listId, listName, columns, 
               const value = response.values[idx] ?? null;
               const item = activeItems.find(it => it.id === result.itemId)!;
               if (value != null) {
-                await itemsApi.update(listId, item.id, { values: { ...item.values, [targetCol.id]: value } });
+                const storeValue = encodeValue(value);
+                await itemsApi.update(listId, item.id, { values: { ...item.values, [targetCol.id]: storeValue } });
                 setResults(prev => prev.map(r =>
-                  r.itemId === result.itemId ? { ...r, status: 'success', value } : r
+                  r.itemId === result.itemId ? { ...r, status: 'success', value: storeValue } : r
                 ));
               } else {
                 setResults(prev => prev.map(r =>
@@ -224,6 +274,7 @@ export function AICompletionModal({ isOpen, onClose, listId, listName, columns, 
     }
 
     queryClient.invalidateQueries({ queryKey: ['items', listId] });
+    queryClient.invalidateQueries({ queryKey: ['list', listId] });
     setIsRunning(false);
   };
 
