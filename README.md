@@ -37,6 +37,8 @@ A flexible list management web app for organizing data in customizable tables wi
 - **Dark/Light Mode** - Theme toggle with system preference detection
 - **Accessible Modals** - Full keyboard navigation, focus management, and screen reader support
 - **Item Count** - Always visible count of items (with filtered count when filtering)
+- **Search with ESC to Clear** - Search box across all fields; press ESC to clear
+- **Tabbed System Settings** - Settings modal organized into tabs (Overview, Preferences, AI, Backup) to reduce scrolling
 
 ### Data Integrity
 - **Recycle Bin** - Deleted items are soft-deleted and can be restored from the recycle bin
@@ -44,13 +46,15 @@ A flexible list management web app for organizing data in customizable tables wi
 
 ### AI Features
 - **AI Completion** - Auto-fill cells using AI-powered suggestions (batch mode across all items)
+  - Handles choice and multiple choice columns — auto-adds new options when AI suggests values not in the existing list
+  - Sends valid choice options to the AI so it can make informed suggestions
 - **Single-Item AI Complete** - Fill multiple columns on a single item in one AI call, with preview before applying
   - Select any combination of columns to fill
   - Optional additional prompt instructions
   - Auto-adds new choice/multiple choice options when AI suggests values not in the existing list
   - Understands column types — returns arrays for multiple choice fields, ISO dates, booleans, numbers, etc.
 - **Chat Integration** - Chat with AI for data insights and assistance, accessed via a tabbed modal alongside AI Complete
-- **Configurable AI Model** - Use Gemini API with custom prompts
+- **Configurable AI Model** - Use Gemini API with custom prompts and model selection
 
 ### Other Features
 - **Rename Lists** - Update list names from the menu
