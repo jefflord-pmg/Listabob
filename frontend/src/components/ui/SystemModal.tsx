@@ -226,7 +226,7 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          gemini_api_key: geminiApiKey,
+          gemini_api_key: geminiApiKey || null,
           gemini_model: geminiModel || null,
           gemini_system_prompt: geminiSystemPrompt || null,
         }),
@@ -409,8 +409,9 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
             </label>
             <input
               type="password"
+              autoComplete="new-password"
               className="input input-bordered w-full"
-              placeholder="Enter your Google Gemini API key"
+              placeholder={geminiApiKey ? '(key saved — enter new value to change)' : 'Enter your Google Gemini API key'}
               value={geminiApiKey}
               onChange={(e) => {
                 setGeminiApiKey(e.target.value);

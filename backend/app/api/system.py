@@ -119,7 +119,7 @@ def update_system_config(request: UpdateConfigRequest):
     if request.confirm_delete is not None:
         config["confirm_delete"] = request.confirm_delete
     
-    if request.gemini_api_key is not None:
+    if request.gemini_api_key is not None and request.gemini_api_key.strip():
         config["gemini_api_key"] = request.gemini_api_key
     
     if request.gemini_model is not None:
