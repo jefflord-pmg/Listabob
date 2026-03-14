@@ -267,6 +267,169 @@ async def complete_column_value(request: CompletionRequest):
         raise HTTPException(status_code=502, detail=f"Network error: {str(e)}")
 
 
+class TargetColumnInfo(BaseModel):
+    name: str
+    column_type: str
+    config: dict | None = None  # e.g. {"choices": [...]} for choice/multiple_choice
+
+
+class ItemCompletionRequest(BaseModel):
+    list_name: str
+    item_context: dict  # column_name -> value
+    target_columns: list[TargetColumnInfo]
+    model: str | None = None
+    additional_prompt: str | None = None
+
+
+class ItemCompletionResponse(BaseModel):
+    values: dict[str, str | list[str] | None]  # column_name -> value (list for multiple_choice)
+    model: str
+
+
+@router.post("/complete-item", response_model=ItemCompletionResponse)
+async def complete_item_columns(request: ItemCompletionRequest):
+    """Use AI to fill multiple columns on a single item."""
+    config = get_config()
+    api_key = config.get("gemini_api_key")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="Gemini API key not configured. Please set it in System Settings.")
+
+    if not request.target_columns:
+        raise HTTPException(status_code=400, detail="No target columns provided.")
+
+    model_name = request.model or config.get("gemini_model") or "gemini-2.0-flash"
+
+    # Build item context
+    context_lines = []
+    for col_name, value in request.item_context.items():
+        context_lines.append(f"  {col_name}: {value}")
+    item_context_str = "\n".join(context_lines)
+
+    # Build column descriptions
+    col_descriptions = []
+    for tc in request.target_columns:
+        desc = f'- "{tc.name}" (type: {tc.column_type})'
+        if tc.column_type == "choice" and tc.config and tc.config.get("choices"):
+            choices = tc.config["choices"]
+            desc += f'\n  Valid options: {", ".join(str(c) for c in choices)}'
+            desc += "\n  You may also suggest a new option if none of the existing ones fit."
+        elif tc.column_type == "multiple_choice" and tc.config and tc.config.get("choices"):
+            choices = tc.config["choices"]
+            desc += f'\n  Valid options: {", ".join(str(c) for c in choices)}'
+            desc += "\n  Return a JSON array of strings. You may suggest new options if needed."
+        elif tc.column_type == "multiple_choice":
+            desc += "\n  Return a JSON array of strings."
+        elif tc.column_type in ("date", "datetime"):
+            desc += "\n  Use ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)."
+        elif tc.column_type == "boolean":
+            desc += "\n  Use true or false."
+        elif tc.column_type in ("number", "currency", "rating"):
+            desc += "\n  Use a number."
+        col_descriptions.append(desc)
+
+    columns_str = "\n".join(col_descriptions)
+    col_names = [tc.name for tc in request.target_columns]
+
+    system_instruction = (
+        f'You are a data completion assistant for a list called "{request.list_name}".\n\n'
+        "Your job is to determine the most likely values for the specified columns "
+        "based on the other data in the item.\n\n"
+        "Target columns to fill:\n"
+        f"{columns_str}\n\n"
+        "Rules:\n"
+        f"- Respond with ONLY a valid JSON object with keys: {col_names}\n"
+        "- Use null (JSON null) for any column you cannot determine with reasonable confidence.\n"
+        "- For multiple_choice columns, the value MUST be a JSON array of strings.\n"
+        "- For all other columns, the value should be a single string, number, or boolean as appropriate.\n"
+        "- No explanation, no markdown fences, no extra text — just the JSON object.\n"
+    )
+
+    if request.additional_prompt:
+        system_instruction += f"\nAdditional instructions from the user:\n{request.additional_prompt}\n"
+
+    user_message = (
+        f'Here is an item from the list "{request.list_name}":\n'
+        f"{item_context_str}\n\n"
+        f"What should the values be for: {', '.join(col_names)}?"
+    )
+
+    payload = {
+        "systemInstruction": {"parts": [{"text": system_instruction}]},
+        "contents": [{"role": "user", "parts": [{"text": user_message}]}],
+        "generationConfig": {"candidateCount": 1, "temperature": 0.1},
+    }
+
+    log.info(
+        "ITEM COMPLETION REQUEST  list=%r  columns=%r  model=%s",
+        request.list_name, col_names, model_name,
+    )
+    log.debug("ITEM COMPLETION CONTEXT:\n%s", item_context_str)
+
+    url = f"{GEMINI_BASE_URL}/models/{model_name}:generateContent"
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(url, params={"key": api_key}, json=payload)
+
+        if resp.status_code == 401 or resp.status_code == 403:
+            raise HTTPException(status_code=401, detail="Invalid Gemini API key.")
+
+        if resp.status_code != 200:
+            error_msg = resp.text[:300]
+            log.error("ITEM COMPLETION ERROR %d  model=%s  body=%s", resp.status_code, model_name, error_msg)
+            raise HTTPException(status_code=500, detail=f"Gemini API error ({resp.status_code})")
+
+        data = resp.json()
+        raw = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+
+        log.info("ITEM COMPLETION RESPONSE  model=%s  raw=%r", model_name, raw[:300])
+
+        # Parse JSON object from the response
+        try:
+            import json as jsonlib
+            clean = raw.strip()
+            if clean.startswith("```"):
+                clean = "\n".join(clean.split("\n")[1:])
+            if clean.endswith("```"):
+                clean = "\n".join(clean.split("\n")[:-1])
+            parsed = jsonlib.loads(clean.strip())
+            if not isinstance(parsed, dict):
+                raise ValueError("Response is not a JSON object")
+
+            # Normalise values
+            result: dict[str, str | list[str] | None] = {}
+            for tc in request.target_columns:
+                val = parsed.get(tc.name)
+                if val is None:
+                    result[tc.name] = None
+                elif tc.column_type == "multiple_choice":
+                    if isinstance(val, list):
+                        result[tc.name] = [str(v) for v in val]
+                    elif isinstance(val, str):
+                        # Try to parse as JSON array, otherwise split by comma
+                        try:
+                            arr = jsonlib.loads(val)
+                            result[tc.name] = [str(v) for v in arr] if isinstance(arr, list) else [val]
+                        except Exception:
+                            result[tc.name] = [v.strip() for v in val.split(",") if v.strip()]
+                    else:
+                        result[tc.name] = [str(val)]
+                else:
+                    result[tc.name] = str(val)
+        except Exception as parse_err:
+            log.error("ITEM COMPLETION PARSE ERROR  raw=%r  err=%s", raw[:200], parse_err)
+            raise HTTPException(status_code=500, detail=f"Could not parse model response as JSON object: {raw[:100]}")
+
+        return ItemCompletionResponse(values=result, model=model_name)
+
+    except httpx.TimeoutException:
+        log.error("ITEM COMPLETION TIMEOUT  model=%s", model_name)
+        raise HTTPException(status_code=504, detail="Request to Gemini timed out.")
+    except httpx.RequestError as e:
+        log.error("ITEM COMPLETION NETWORK ERROR  model=%s  error=%s", model_name, str(e))
+        raise HTTPException(status_code=502, detail=f"Network error: {str(e)}")
+
+
 class BatchCompletionRequest(BaseModel):
     list_name: str
     items: list[dict]  # each: { "item_context": {col_name: value, ...} }

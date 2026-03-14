@@ -143,6 +143,25 @@ export interface BatchCompletionResponse {
   model: string;
 }
 
+export interface TargetColumnInfo {
+  name: string;
+  column_type: string;
+  config?: Record<string, unknown> | null;
+}
+
+export interface ItemCompletionRequest {
+  list_name: string;
+  item_context: Record<string, unknown>;
+  target_columns: TargetColumnInfo[];
+  model?: string;
+  additional_prompt?: string;
+}
+
+export interface ItemCompletionResponse {
+  values: Record<string, string | string[] | null>;
+  model: string;
+}
+
 export interface RecycleBinItem {
   id: string;
   list_id: string;

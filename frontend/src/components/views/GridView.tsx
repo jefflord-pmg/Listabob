@@ -979,6 +979,7 @@ export function GridView({ listId, listName, columns, items, views, showInternal
         <ChatModal
           isOpen={!!chatItem}
           onClose={() => setChatItem(null)}
+          listId={listId}
           listName={listName}
           item={chatItem}
           columns={columns}

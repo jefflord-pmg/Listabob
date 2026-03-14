@@ -43,9 +43,13 @@ A flexible list management web app for organizing data in customizable tables wi
 - **Undo Support** - Recover deleted data without permanent loss
 
 ### AI Features
-- **AI Completion** - Auto-fill cells using AI-powered suggestions
-- **Batch Completion** - Apply AI completions to multiple cells at once
-- **Chat Integration** - Chat with AI for data insights and assistance
+- **AI Completion** - Auto-fill cells using AI-powered suggestions (batch mode across all items)
+- **Single-Item AI Complete** - Fill multiple columns on a single item in one AI call, with preview before applying
+  - Select any combination of columns to fill
+  - Optional additional prompt instructions
+  - Auto-adds new choice/multiple choice options when AI suggests values not in the existing list
+  - Understands column types — returns arrays for multiple choice fields, ISO dates, booleans, numbers, etc.
+- **Chat Integration** - Chat with AI for data insights and assistance, accessed via a tabbed modal alongside AI Complete
 - **Configurable AI Model** - Use Gemini API with custom prompts
 
 ### Other Features

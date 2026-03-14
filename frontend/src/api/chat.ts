@@ -1,5 +1,5 @@
 import api from './client';
-import type { ChatRequest, ChatResponse, CompletionRequest, CompletionResponse, BatchCompletionRequest, BatchCompletionResponse, GeminiModel } from '../types';
+import type { ChatRequest, ChatResponse, CompletionRequest, CompletionResponse, BatchCompletionRequest, BatchCompletionResponse, ItemCompletionRequest, ItemCompletionResponse, GeminiModel } from '../types';
 
 export const chatApi = {
   sendMessage: async (request: ChatRequest): Promise<ChatResponse> => {
@@ -19,6 +19,11 @@ export const chatApi = {
 
   completeColumnBatch: async (request: BatchCompletionRequest): Promise<BatchCompletionResponse> => {
     const { data } = await api.post('/chat/complete-batch', request);
+    return data;
+  },
+
+  completeItem: async (request: ItemCompletionRequest): Promise<ItemCompletionResponse> => {
+    const { data } = await api.post('/chat/complete-item', request);
     return data;
   },
 };
