@@ -23,6 +23,24 @@ def get_base_dir() -> Path:
     return Path(__file__).parent.parent.parent.parent
 
 
+def get_version() -> str:
+    """Read the build version from the VERSION file."""
+    # Frozen exe: VERSION is next to the executable or in _MEIPASS
+    if getattr(sys, 'frozen', False):
+        candidates = [
+            Path(sys.executable).parent / 'VERSION',
+        ]
+        if hasattr(sys, '_MEIPASS'):
+            candidates.insert(0, Path(sys._MEIPASS) / 'VERSION')
+    else:
+        candidates = [get_base_dir() / 'VERSION']
+
+    for path in candidates:
+        if path.exists():
+            return path.read_text().strip()
+    return "dev"
+
+
 CONFIG_PATH = get_base_dir() / "config.json"
 DB_PATH = DATA_DIR / "listabob.db"
 
@@ -98,6 +116,12 @@ def get_system_config():
         gemini_model=config.get("gemini_model"),
         gemini_system_prompt=config.get("gemini_system_prompt"),
     )
+
+
+@router.get("/version")
+def get_system_version():
+    """Return the current build version."""
+    return {"version": get_version()}
 
 
 @router.put("/config")

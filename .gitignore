@@ -1,3 +1,6 @@
+# Build artifacts
+VERSION
+
 # Python
 __pycache__/
 *.py[cod]

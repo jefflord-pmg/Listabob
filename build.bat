@@ -30,6 +30,15 @@ REM ============================================
 REM FULL BUILD STARTS HERE
 REM ============================================
 
+REM Step 0: Generate version number
+echo [0/4] Generating version number...
+for /f %%i in ('git rev-parse --short HEAD') do set GIT_HASH=%%i
+for /f %%i in ('powershell -command "Get-Date -Format yyyy.MMdd.HHmm"') do set CAL_VER=%%i
+set BUILD_VERSION=!CAL_VER!-!GIT_HASH!
+echo !BUILD_VERSION!> VERSION
+echo Version: !BUILD_VERSION!
+echo.
+
 REM Step 1: Build frontend
 echo [1/4] Building frontend...
 cd frontend

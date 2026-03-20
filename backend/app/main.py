@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.config import settings
 from app.database import engine, Base
-from app.api import lists, items, views, templates, imports, exports, auth, system, chat
+from app.api import lists, items, views, templates, imports, exports, auth, system, chat, external
 from app.migrations import run_migrations
 from app.logger import get_logger
 
@@ -43,6 +43,7 @@ app.include_router(views.router, prefix="/api")
 app.include_router(templates.router, prefix="/api")
 app.include_router(imports.router, prefix="/api")
 app.include_router(exports.router, prefix="/api")
+app.include_router(external.router, prefix="/api")
 app.include_router(system.router)
 app.include_router(chat.router)
 

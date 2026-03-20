@@ -21,6 +21,8 @@ a = Analysis(
         (str(backend_dir / 'app'), 'app'),
         # Include frontend static files
         (str(frontend_dist), 'static'),
+        # Include version file
+        ('VERSION', '.'),
     ],
     hiddenimports=[
         'uvicorn.logging',
@@ -50,6 +52,8 @@ a = Analysis(
         'app.api.auth',
         'app.api.system',
         'app.api.chat',
+        'app.api.external',
+        'app.api.dependencies',
         'sqlalchemy.dialects.sqlite',
     ],
     hookspath=[],

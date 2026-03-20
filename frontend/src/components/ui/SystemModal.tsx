@@ -25,6 +25,7 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
   const { settings, updateSettings } = useSettings();
   const [activeTab, setActiveTab] = useState<SettingsTab>('overview');
   const [stats, setStats] = useState<SystemStats | null>(null);
+  const [version, setVersion] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -51,6 +52,7 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
     if (isOpen) {
       fetchStats();
       fetchConfig();
+      fetchVersion();
     }
   }, [isOpen]);
 
@@ -66,6 +68,18 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
       console.error('Failed to fetch stats:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchVersion = async () => {
+    try {
+      const response = await fetch('/api/system/version');
+      if (response.ok) {
+        const data = await response.json();
+        setVersion(data.version);
+      }
+    } catch (err) {
+      console.error('Failed to fetch version:', err);
     }
   };
 
@@ -306,6 +320,12 @@ export function SystemModal({ isOpen, onClose, onLogout }: SystemModalProps) {
       {/* Overview Tab */}
       {activeTab === 'overview' && (
         <div className="space-y-4">
+          {version && (
+            <div className="flex items-center gap-2 text-sm text-base-content/60">
+              <span className="font-medium">Version</span>
+              <span className="font-mono badge badge-ghost badge-sm">{version}</span>
+            </div>
+          )}
           <h3 className="font-semibold text-base text-base-content/70">Database Statistics</h3>
           {loading ? (
             <span className="loading loading-spinner loading-sm"></span>
