@@ -56,12 +56,24 @@ A flexible list management web app for organizing data in customizable tables wi
 - **Chat Integration** - Chat with AI for data insights and assistance, accessed via a tabbed modal alongside AI Complete
 - **Configurable AI Model** - Use Gemini API with custom prompts and model selection
 
+### External REST API
+
+A token-authenticated REST API (`/api/v1`) for integrating Listabob with external tools and scripts:
+
+- **List & item access** - Read lists and items from external apps
+- **Create / update / delete items** - Full CRUD via HTTP with column-name-based field addressing
+- **Soft deletes** - Deleted items land in the recycle bin and can be restored from the UI
+- **Bearer token auth** - Same token used by the web app; obtained via `POST /api/auth/login`
+
+See [API_DOCUMENTATION.md](API_DOCUMENTATION.md) for the full endpoint reference and a Python quick-start. A reusable Python client is in [`examples/listabob_client.py`](examples/listabob_client.py).
+
 ### Other Features
 - **Rename Lists** - Update list names from the menu
 - **Delete Lists** - Remove lists with confirmation
 - **New Row Visibility** - Newly added rows appear at the bottom and are highlighted
 - **Persistent Views** - Sort order, column positions, and filters are saved automatically
 - **Offline Support** - PWA functionality for improved performance and offline capabilities
+- **Version Display** - Current build version shown in the System Settings modal (Overview tab)
 
 ## Tech Stack
 
@@ -179,6 +191,7 @@ Listabob/
 │   │   │   ├── auth.py       # Authentication endpoints
 │   │   │   ├── chat.py       # Chat/AI endpoints
 │   │   │   ├── exports.py    # CSV export endpoints
+│   │   │   ├── external.py   # External REST API (/api/v1)
 │   │   │   ├── imports.py    # CSV import endpoints
 │   │   │   ├── items.py      # Item/row management
 │   │   │   ├── lists.py      # List management
@@ -219,8 +232,10 @@ Listabob/
 │   ├── package.json
 │   └── vite.config.ts        # Vite configuration
 ├── data/                     # SQLite database location (generated at runtime)
+├── examples/                 # Example scripts (e.g., listabob_client.py)
 ├── build.bat                 # Build script for standalone executable
 ├── listabob.spec             # PyInstaller configuration
+├── API_DOCUMENTATION.md      # External REST API reference
 ├── config.json               # Configuration file (gitignored)
 ├── config.example.json       # Example configuration
 └── README.md
