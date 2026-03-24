@@ -84,7 +84,7 @@ export function EditColumnModal({ isOpen, column, items, onClose, onSave, onDele
   const isDateType = columnType === 'date' || columnType === 'datetime';
   const isBooleanType = columnType === 'boolean';
   const isNumberType = columnType === 'number' || columnType === 'currency' || columnType === 'rating';
-  const isTextColumnType = columnType === 'text' || columnType === 'hyperlink';
+  const isTextColumnType = columnType === 'text' || columnType === 'hyperlink' || columnType === 'longtext';
   const isTextType = column.column_type === 'text';
   const canConvert = isTextType;
 
@@ -197,6 +197,7 @@ export function EditColumnModal({ isOpen, column, items, onClose, onSave, onDele
   const getColumnTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
       text: 'Text',
+      longtext: 'Long Text',
       number: 'Number',
       currency: 'Currency',
       date: 'Date',

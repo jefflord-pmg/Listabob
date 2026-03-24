@@ -6,6 +6,7 @@ from enum import Enum
 
 class ColumnType(str, Enum):
     TEXT = "text"
+    LONGTEXT = "longtext"
     NUMBER = "number"
     CURRENCY = "currency"
     DATE = "date"

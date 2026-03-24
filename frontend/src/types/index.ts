@@ -1,5 +1,6 @@
 export type ColumnType =
   | 'text'
+  | 'longtext'
   | 'number'
   | 'currency'
   | 'date'

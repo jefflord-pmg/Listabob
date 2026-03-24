@@ -10,6 +10,7 @@ interface AddColumnModalProps {
 
 const COLUMN_TYPES: { value: ColumnType; label: string; description: string }[] = [
   { value: 'text', label: 'Text', description: 'Single line of text' },
+  { value: 'longtext', label: 'Long Text', description: 'Markdown-formatted long text' },
   { value: 'number', label: 'Number', description: 'Numeric values' },
   { value: 'currency', label: 'Currency', description: 'Money values with $ symbol' },
   { value: 'date', label: 'Date', description: 'Calendar date' },
@@ -112,7 +113,7 @@ export function AddColumnModal({ isOpen, onClose, onAdd }: AddColumnModalProps) 
   const isDateType = columnType === 'date' || columnType === 'datetime';
   const isBooleanType = columnType === 'boolean';
   const isNumberType = columnType === 'number' || columnType === 'currency' || columnType === 'rating';
-  const isTextType = columnType === 'text' || columnType === 'hyperlink';
+  const isTextType = columnType === 'text' || columnType === 'hyperlink' || columnType === 'longtext';
 
   const renderDefaultValueInput = () => {
     if (needsChoices) {

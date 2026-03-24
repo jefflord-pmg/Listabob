@@ -8,6 +8,7 @@ interface HyperlinkCellProps {
 export function HyperlinkCell({ value, onChange }: HyperlinkCellProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const startEditing = () => {
     setEditValue(value || '');
@@ -20,6 +21,15 @@ export function HyperlinkCell({ value, onChange }: HyperlinkCellProps) {
       onChange(newValue);
     }
     setIsEditing(false);
+  };
+
+  const copyToClipboard = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!value) return;
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
   };
 
   const isValidUrl = (str: string) => {
@@ -63,7 +73,15 @@ export function HyperlinkCell({ value, onChange }: HyperlinkCellProps) {
         </a>
         <button
           className="btn btn-ghost btn-xs opacity-50 hover:opacity-100"
+          onClick={copyToClipboard}
+          title={copied ? 'Copied!' : 'Copy URL'}
+        >
+          {copied ? '✓' : '⎘'}
+        </button>
+        <button
+          className="btn btn-ghost btn-xs opacity-50 hover:opacity-100"
           onClick={startEditing}
+          title="Edit URL"
         >
           ✎
         </button>
@@ -80,3 +98,4 @@ export function HyperlinkCell({ value, onChange }: HyperlinkCellProps) {
     </div>
   );
 }
+

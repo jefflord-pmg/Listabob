@@ -3,7 +3,7 @@ import type { Column, Item, ColumnType, View } from '../../types';
 import { useCreateItem, useUpdateItem, useDeleteItem, useRestoreItem } from '../../hooks/useItems';
 import { useAddColumn, useDeleteColumn, useUpdateColumn, useReorderColumns, useUpdateView, useCreateView, useDeleteView } from '../../hooks/useLists';
 import { AddColumnModal, EditColumnModal } from '../columns';
-import { DateCell, ChoiceCell, BooleanCell, CurrencyCell, HyperlinkCell } from '../cells';
+import { DateCell, ChoiceCell, BooleanCell, CurrencyCell, HyperlinkCell, LongTextCell } from '../cells';
 import { ConfirmModal, Modal } from '../ui';
 import { FilterPanel } from './FilterPanel';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -589,6 +589,15 @@ export function GridView({ listId, listName, columns, items, views, showInternal
         return (
           <HyperlinkCell
             value={value as string | null}
+            onChange={(v) => handleCellChange(item.id, column.id, v)}
+          />
+        );
+
+      case 'longtext':
+        return (
+          <LongTextCell
+            value={value as string | null}
+            columnName={column.name}
             onChange={(v) => handleCellChange(item.id, column.id, v)}
           />
         );
