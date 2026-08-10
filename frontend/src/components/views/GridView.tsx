@@ -859,8 +859,21 @@ export function GridView({ listId, listName, columns, items, views, showInternal
                   </div>
                 </th>
               ))}
+              {INTERNAL_COLUMNS
+                .filter(ic => ic.key === 'updated_at')
+                .map((ic) => (
+                <th key={ic.id} className="bg-base-200 select-none">
+                  <span
+                    className="cursor-pointer hover:text-primary text-base-content/60 italic"
+                    onClick={() => handleSort(ic.id)}
+                  >
+                    {ic.name}
+                    {getSortIcon(ic.id)}
+                  </span>
+                </th>
+              ))}
               {showInternalColumns && INTERNAL_COLUMNS
-                .filter(ic => ic.key !== 'deleted_at' || showDeletedItems)
+                .filter(ic => ic.key !== 'updated_at' && (ic.key !== 'deleted_at' || showDeletedItems))
                 .map((ic) => (
                 <th key={ic.id} className="bg-base-200 select-none">
                   <span
@@ -903,8 +916,15 @@ export function GridView({ listId, listName, columns, items, views, showInternal
                   )}
                 </td>
               ))}
+              {INTERNAL_COLUMNS
+                .filter(ic => ic.key === 'updated_at')
+                .map((ic) => (
+                <td key={ic.id} className="text-base-content/50 text-xs whitespace-nowrap">
+                  {item[ic.key] ? formatUtcDate(item[ic.key] as string) : '—'}
+                </td>
+              ))}
               {showInternalColumns && INTERNAL_COLUMNS
-                .filter(ic => ic.key !== 'deleted_at' || showDeletedItems)
+                .filter(ic => ic.key !== 'updated_at' && (ic.key !== 'deleted_at' || showDeletedItems))
                 .map((ic) => (
                 <td key={ic.id} className="text-base-content/50 text-xs whitespace-nowrap">
                   {item[ic.key] ? formatUtcDate(item[ic.key] as string) : '—'}
