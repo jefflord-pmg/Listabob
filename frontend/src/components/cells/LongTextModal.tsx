@@ -43,8 +43,8 @@ export function LongTextModal({ isOpen, onClose, title, value, onChange }: LongT
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} className="max-w-3xl w-full">
-      <div className="flex items-center gap-2 mb-3">
+    <Modal isOpen={isOpen} onClose={onClose} title={title} className="max-w-3xl w-full max-h-[90vh] flex flex-col">
+      <div className="flex items-center gap-2 mb-3 shrink-0">
         <div className="flex-1" />
         {isEditing ? (
           <>
@@ -71,15 +71,15 @@ export function LongTextModal({ isOpen, onClose, title, value, onChange }: LongT
 
       {isEditing ? (
         <textarea
-          className="textarea textarea-bordered w-full font-mono text-sm"
-          style={{ minHeight: '400px', resize: 'vertical' }}
+          className="textarea textarea-bordered w-full font-mono text-sm flex-1"
+          style={{ minHeight: '300px', resize: 'vertical' }}
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
           placeholder="Write markdown here..."
           autoFocus
         />
       ) : (
-        <div className="min-h-[200px] p-4 rounded-lg bg-base-200 overflow-auto">
+        <div className="flex-1 min-h-0 overflow-auto p-4 rounded-lg bg-base-200">
           {value ? (
             <div className="prose prose-sm max-w-none
               prose-headings:text-base-content

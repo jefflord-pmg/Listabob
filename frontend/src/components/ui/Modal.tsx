@@ -86,7 +86,7 @@ export function Modal({ isOpen, onClose, title, children, className = '' }: Moda
         ref={modalRef}
         className={`modal-box ${className}`}
       >
-        <h3 id="modal-title" className="font-bold text-lg mb-4">{title}</h3>
+        <h3 id="modal-title" className="font-bold text-lg mb-4 shrink-0">{title}</h3>
         {children}
         <button 
           className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
