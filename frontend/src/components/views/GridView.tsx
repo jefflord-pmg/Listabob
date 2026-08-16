@@ -63,6 +63,8 @@ export function GridView({ listId, listName, columns, items, views, showInternal
   const [filters, setFilters] = useState<Record<string, ColumnFilter>>({});
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [isSaveFilterModalOpen, setIsSaveFilterModalOpen] = useState(false);
+  const [saveFilterMode, setSaveFilterMode] = useState<'create' | 'update'>('create');
+  const [selectedUpdateViewId, setSelectedUpdateViewId] = useState<string>('');
   const [newFilterName, setNewFilterName] = useState('');
   const [chatItem, setChatItem] = useState<Item | null>(null);
   
@@ -313,15 +315,46 @@ export function GridView({ listId, listName, columns, items, views, showInternal
     return result;
   };
 
+  const handleOpenSaveFilterModal = () => {
+    if (activeFilterView && savedFilters.some(v => v.id === activeFilterView.id)) {
+      setSaveFilterMode('update');
+      setSelectedUpdateViewId(activeFilterView.id);
+    } else if (savedFilters.length > 0) {
+      setSaveFilterMode('create');
+      setSelectedUpdateViewId(savedFilters[0].id);
+    } else {
+      setSaveFilterMode('create');
+      setSelectedUpdateViewId('');
+    }
+    setNewFilterName('');
+    setIsSaveFilterModalOpen(true);
+  };
+
   const handleSaveFilter = () => {
-    const trimmedName = newFilterName.trim();
-    if (!trimmedName) return;
-    
     const config = {
       filters: serializeFilters(filters),
       sortBy: sortColumnId,
       sortDir: sortDirection,
     };
+
+    if (saveFilterMode === 'update') {
+      const targetView = savedFilters.find(v => v.id === selectedUpdateViewId);
+      if (!targetView) return;
+
+      updateView.mutate({
+        listId,
+        viewId: targetView.id,
+        name: targetView.name,
+        config,
+      });
+      setActiveViewId(targetView.id);
+      setIsSaveFilterModalOpen(false);
+      setNewFilterName('');
+      return;
+    }
+
+    const trimmedName = newFilterName.trim();
+    if (!trimmedName) return;
 
     // Check if a view with the same name already exists
     const existingView = views.find(
@@ -807,10 +840,10 @@ export function GridView({ listId, listName, columns, items, views, showInternal
           )}
           
           {/* Save Current Filter */}
-          {hasActiveFilters && !activeFilterView && (
+          {hasActiveFilters && (
             <button 
               className="btn btn-sm btn-ghost"
-              onClick={() => setIsSaveFilterModalOpen(true)}
+              onClick={handleOpenSaveFilterModal}
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
@@ -1085,38 +1118,92 @@ export function GridView({ listId, listName, columns, items, views, showInternal
         }}
         title="Save Filter"
       >
-        <div className="form-control">
-          <label className="label" htmlFor="filter-name">
-            <span className="label-text">Filter Name</span>
-          </label>
-          <input
-            id="filter-name"
-            type="text"
-            className="input input-bordered"
-            value={newFilterName}
-            onChange={(e) => setNewFilterName(e.target.value)}
-            placeholder="e.g., Unwatched Shows"
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && newFilterName.trim()) {
-                handleSaveFilter();
-              }
-            }}
-          />
-        </div>
+        {savedFilters.length > 0 && (
+          <div className="tabs tabs-boxed mb-4 p-1 bg-base-200">
+            <button
+              type="button"
+              className={`tab flex-1 ${saveFilterMode === 'create' ? 'tab-active font-medium' : ''}`}
+              onClick={() => setSaveFilterMode('create')}
+            >
+              Create New
+            </button>
+            <button
+              type="button"
+              className={`tab flex-1 ${saveFilterMode === 'update' ? 'tab-active font-medium' : ''}`}
+              onClick={() => {
+                setSaveFilterMode('update');
+                if (!selectedUpdateViewId && savedFilters.length > 0) {
+                  setSelectedUpdateViewId(savedFilters[0].id);
+                }
+              }}
+            >
+              Update Existing
+            </button>
+          </div>
+        )}
+
+        {saveFilterMode === 'create' ? (
+          <div className="form-control">
+            <label className="label" htmlFor="filter-name">
+              <span className="label-text">Filter Name</span>
+            </label>
+            <input
+              id="filter-name"
+              type="text"
+              className="input input-bordered"
+              value={newFilterName}
+              onChange={(e) => setNewFilterName(e.target.value)}
+              placeholder="e.g., Unwatched Shows"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newFilterName.trim()) {
+                  handleSaveFilter();
+                }
+              }}
+            />
+          </div>
+        ) : (
+          <div className="form-control">
+            <label className="label" htmlFor="select-filter-to-update">
+              <span className="label-text">Select filter to update</span>
+            </label>
+            <select
+              id="select-filter-to-update"
+              className="select select-bordered w-full"
+              value={selectedUpdateViewId}
+              onChange={(e) => setSelectedUpdateViewId(e.target.value)}
+            >
+              <option value="" disabled>Select a saved filter...</option>
+              {savedFilters.map((view) => (
+                <option key={view.id} value={view.id}>
+                  {view.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-base-content/60 mt-2">
+              This will overwrite the selected saved filter with your current filter and sort settings.
+            </p>
+          </div>
+        )}
+
         <div className="modal-action">
-          <button className="btn btn-ghost" onClick={() => {
-            setIsSaveFilterModalOpen(false);
-            setNewFilterName('');
-          }}>
+          <button 
+            type="button"
+            className="btn btn-ghost" 
+            onClick={() => {
+              setIsSaveFilterModalOpen(false);
+              setNewFilterName('');
+            }}
+          >
             Cancel
           </button>
           <button 
+            type="button"
             className="btn btn-primary" 
             onClick={handleSaveFilter}
-            disabled={!newFilterName.trim()}
+            disabled={saveFilterMode === 'create' ? !newFilterName.trim() : !selectedUpdateViewId}
           >
-            Save
+            {saveFilterMode === 'create' ? 'Save New Filter' : 'Update Filter'}
           </button>
         </div>
       </Modal>

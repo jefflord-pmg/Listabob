@@ -15,12 +15,13 @@ if not exist "backend" (
 
 REM Ask user what they want to do
 echo What would you like to do?
-echo   [1] Full build and create executable
-echo   [2] Just copy existing build to AppData\Local
+echo   [1] Build and deploy locally
+echo   [2] Full build and create executable (publish to GitHub or run locally)
+echo   [3] Just copy existing build to AppData\Local
 echo.
-set /p BUILD_CHOICE="Enter your choice (1-2): "
+set /p BUILD_CHOICE="Enter your choice (1-3): "
 
-if /i "!BUILD_CHOICE!"=="2" (
+if /i "!BUILD_CHOICE!"=="3" (
     call :copy_to_appdata
     pause
     exit /b 0
@@ -94,6 +95,12 @@ echo Archive: dist\Listabob.7z
 echo.
 echo To run: dist\Listabob\Listabob.exe
 echo.
+
+if /i "!BUILD_CHOICE!"=="1" (
+    call :copy_to_appdata
+    pause
+    exit /b 0
+)
 
 REM Offer to publish to GitHub
 echo.
