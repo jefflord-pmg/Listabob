@@ -23,6 +23,7 @@ export function FilterPanel({
   totalCount
 }: FilterPanelProps) {
   const [expandedColumns, setExpandedColumns] = useState<Set<string>>(new Set());
+  const [columnSearch, setColumnSearch] = useState<Record<string, string>>({});
 
   // Get unique values for each column from items
   const columnValues = useMemo(() => {
@@ -117,9 +118,22 @@ export function FilterPanel({
     
     if (values.length === 0) return null;
     
-    const isExpanded = expandedColumns.has(column.id);
-    const visibleValues = isExpanded ? values : values.slice(0, MAX_VISIBLE_OPTIONS);
     const hasMore = values.length > MAX_VISIBLE_OPTIONS;
+    const searchQuery = (columnSearch[column.id] || '').trim().toLowerCase();
+
+    let filteredValues = values;
+    if (searchQuery) {
+      filteredValues = values.filter(v => {
+        if (v === '__empty__') {
+          return 'empty'.includes(searchQuery) || '(empty)'.includes(searchQuery);
+        }
+        return v.toLowerCase().includes(searchQuery);
+      });
+    }
+
+    const isExpanded = expandedColumns.has(column.id);
+    const visibleValues = isExpanded ? filteredValues : filteredValues.slice(0, MAX_VISIBLE_OPTIONS);
+    const showExpandButton = filteredValues.length > MAX_VISIBLE_OPTIONS;
     const activeFilter = filters[column.id];
     const activeValues = activeFilter?.values || new Set<string>();
     const isInverted = !!activeFilter?.inverted;
@@ -180,6 +194,37 @@ export function FilterPanel({
             )}
           </button>
         </div>
+
+        {/* Search choices within column when there are enough options to need "See all" */}
+        {hasMore && (
+          <div className="relative mb-2">
+            <input
+              type="text"
+              className="input input-xs input-bordered w-full pl-7 pr-6"
+              placeholder="Search choices..."
+              value={columnSearch[column.id] || ''}
+              onChange={(e) => setColumnSearch(prev => ({ ...prev, [column.id]: e.target.value }))}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setColumnSearch(prev => ({ ...prev, [column.id]: '' }));
+                }
+              }}
+            />
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-base-content/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {columnSearch[column.id] && (
+              <button
+                type="button"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-base-content/40 hover:text-base-content text-xs px-1"
+                onClick={() => setColumnSearch(prev => ({ ...prev, [column.id]: '' }))}
+                title="Clear choice search"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
         
         <div className="space-y-1">
           {visibleValues.map(value => (
@@ -199,14 +244,23 @@ export function FilterPanel({
               </span>
             </label>
           ))}
+          {filteredValues.length === 0 && searchQuery && (
+            <div className="text-xs text-base-content/50 italic py-1 px-1">
+              No matching choices
+            </div>
+          )}
         </div>
         
-        {hasMore && (
+        {showExpandButton && (
           <button
             className="text-sm text-primary hover:underline mt-1 px-2"
             onClick={() => toggleExpanded(column.id)}
           >
-            {isExpanded ? 'Show less' : `See all (${values.length})`}
+            {isExpanded 
+              ? 'Show less' 
+              : searchQuery 
+                ? `See all matching (${filteredValues.length})` 
+                : `See all (${values.length})`}
           </button>
         )}
       </div>

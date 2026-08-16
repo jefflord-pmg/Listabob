@@ -117,7 +117,7 @@ set /p CHOICE="Enter your choice (1-4): "
 
 if /i "!CHOICE!"=="1" (
     echo Publishing to GitHub...
-    gh release create "!RELEASE_TAG!" dist\Listabob.7z
+    gh release create "!RELEASE_TAG!" dist\Listabob.7z --title "!RELEASE_TAG! Title" --notes "Here are my release notes."
     if errorlevel 1 (
         echo ERROR: GitHub release failed.
     ) else (
@@ -127,7 +127,7 @@ if /i "!CHOICE!"=="1" (
     call :copy_to_appdata
 ) else if /i "!CHOICE!"=="3" (
     echo Publishing to GitHub...
-    gh release create "!RELEASE_TAG!" dist\Listabob.7z
+    gh release create "!RELEASE_TAG!" dist\Listabob.7z --title "!RELEASE_TAG! Title" --notes "Here are my release notes."
     if errorlevel 1 (
         echo ERROR: GitHub release failed.
     ) else (
