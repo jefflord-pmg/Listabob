@@ -110,6 +110,8 @@ export function GridView({ listId, listName, columns, items, views, showInternal
     isOpen: boolean;
     title: string;
     message: string;
+    confirmText?: string;
+    confirmStyle?: 'error' | 'warning' | 'primary';
     onConfirm: () => void;
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
@@ -312,15 +314,44 @@ export function GridView({ listId, listName, columns, items, views, showInternal
   };
 
   const handleSaveFilter = () => {
-    if (!newFilterName.trim()) return;
+    const trimmedName = newFilterName.trim();
+    if (!trimmedName) return;
     
     const config = {
       filters: serializeFilters(filters),
       sortBy: sortColumnId,
       sortDir: sortDirection,
     };
+
+    // Check if a view with the same name already exists
+    const existingView = views.find(
+      v => v.name.toLowerCase() === trimmedName.toLowerCase()
+    );
+
+    if (existingView) {
+      setIsSaveFilterModalOpen(false);
+      setConfirmModal({
+        isOpen: true,
+        title: 'Overwrite Saved Filter',
+        message: `A saved filter named "${existingView.name}" already exists. Do you want to overwrite it with the current filter settings?`,
+        confirmText: 'Overwrite',
+        confirmStyle: 'primary',
+        onConfirm: () => {
+          updateView.mutate({
+            listId,
+            viewId: existingView.id,
+            name: existingView.name,
+            config,
+          });
+          setActiveViewId(existingView.id);
+          setConfirmModal(m => ({ ...m, isOpen: false }));
+          setNewFilterName('');
+        },
+      });
+      return;
+    }
     
-    createView.mutate({ listId, name: newFilterName.trim(), config });
+    createView.mutate({ listId, name: trimmedName, config });
     setIsSaveFilterModalOpen(false);
     setNewFilterName('');
   };
@@ -341,6 +372,8 @@ export function GridView({ listId, listName, columns, items, views, showInternal
       isOpen: true,
       title: 'Delete Saved Filter',
       message: 'Are you sure you want to delete this saved filter?',
+      confirmText: 'Delete',
+      confirmStyle: 'error',
       onConfirm: () => {
         deleteView.mutate({ listId, viewId });
         if (activeViewId === viewId) {
@@ -1006,7 +1039,8 @@ export function GridView({ listId, listName, columns, items, views, showInternal
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
         message={confirmModal.message}
-        confirmText="Delete"
+        confirmText={confirmModal.confirmText || 'Delete'}
+        confirmStyle={confirmModal.confirmStyle || 'error'}
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal(m => ({ ...m, isOpen: false }))}
       />
