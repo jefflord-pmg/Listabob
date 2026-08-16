@@ -73,6 +73,16 @@ export interface View {
 
 export type ViewType = 'grid' | 'gallery' | 'calendar' | 'board';
 
+export interface ColumnFilter {
+  values: Set<string>;
+  inverted?: boolean;
+}
+
+export interface SerializedColumnFilter {
+  values: string[];
+  inverted?: boolean;
+}
+
 export interface CreateListPayload {
   name: string;
   description?: string;

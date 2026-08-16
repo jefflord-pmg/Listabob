@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react';
-import type { Column, Item } from '../../types';
+import type { Column, Item, ColumnFilter } from '../../types';
 
 interface FilterPanelProps {
   columns: Column[];
   items: Item[];
-  filters: Record<string, Set<string>>;
-  onFiltersChange: (filters: Record<string, Set<string>>) => void;
+  filters: Record<string, ColumnFilter>;
+  onFiltersChange: (filters: Record<string, ColumnFilter>) => void;
   onClose: () => void;
   filteredCount: number;
   totalCount: number;
@@ -52,22 +52,43 @@ export function FilterPanel({
 
   const toggleFilter = (columnId: string, value: string) => {
     const newFilters = { ...filters };
+    const current = newFilters[columnId]
+      ? { values: new Set(newFilters[columnId].values), inverted: !!newFilters[columnId].inverted }
+      : { values: new Set<string>(), inverted: false };
     
-    if (!newFilters[columnId]) {
-      newFilters[columnId] = new Set();
-    } else {
-      newFilters[columnId] = new Set(newFilters[columnId]);
-    }
-    
-    if (newFilters[columnId].has(value)) {
-      newFilters[columnId].delete(value);
-      if (newFilters[columnId].size === 0) {
+    if (current.values.has(value)) {
+      current.values.delete(value);
+      if (current.values.size === 0) {
         delete newFilters[columnId];
+      } else {
+        newFilters[columnId] = current;
       }
     } else {
-      newFilters[columnId].add(value);
+      current.values.add(value);
+      newFilters[columnId] = current;
     }
     
+    onFiltersChange(newFilters);
+  };
+
+  const toggleInvert = (columnId: string) => {
+    const newFilters = { ...filters };
+    const current = newFilters[columnId]
+      ? { values: new Set(newFilters[columnId].values), inverted: !newFilters[columnId].inverted }
+      : { values: new Set<string>(), inverted: true };
+    
+    if (current.values.size > 0 || current.inverted) {
+      newFilters[columnId] = current;
+    } else {
+      delete newFilters[columnId];
+    }
+    onFiltersChange(newFilters);
+  };
+
+  const clearColumnFilter = (columnId: string) => {
+    if (!filters[columnId]) return;
+    const newFilters = { ...filters };
+    delete newFilters[columnId];
     onFiltersChange(newFilters);
   };
 
@@ -85,7 +106,7 @@ export function FilterPanel({
     setExpandedColumns(newExpanded);
   };
 
-  const hasActiveFilters = Object.keys(filters).length > 0;
+  const hasActiveFilters = Object.values(filters).some(f => f.values.size > 0);
 
   const renderColumnFilter = (column: Column) => {
     const values = Array.from(columnValues[column.id] || []).sort((a, b) => {
@@ -99,15 +120,65 @@ export function FilterPanel({
     const isExpanded = expandedColumns.has(column.id);
     const visibleValues = isExpanded ? values : values.slice(0, MAX_VISIBLE_OPTIONS);
     const hasMore = values.length > MAX_VISIBLE_OPTIONS;
-    const activeFilters = filters[column.id] || new Set();
+    const activeFilter = filters[column.id];
+    const activeValues = activeFilter?.values || new Set<string>();
+    const isInverted = !!activeFilter?.inverted;
+    const activeCount = activeValues.size;
 
     return (
-      <div key={column.id} className="mb-4">
-        <div className="font-medium text-sm mb-2 flex items-center justify-between">
-          <span>{column.name}</span>
-          {activeFilters.size > 0 && (
-            <span className="badge badge-sm badge-primary">{activeFilters.size}</span>
-          )}
+      <div key={column.id} className="mb-4 pb-3 border-b border-base-200 last:border-b-0">
+        <div className="font-medium text-sm mb-1 flex items-center justify-between">
+          <span className="truncate mr-2 font-semibold" title={column.name}>{column.name}</span>
+          <div className="flex items-center gap-1">
+            {activeCount > 0 && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-xs text-base-content/50 hover:text-error px-1 h-5 min-h-0"
+                onClick={() => clearColumnFilter(column.id)}
+                title={`Clear filter for ${column.name}`}
+              >
+                ✕
+              </button>
+            )}
+            {activeCount > 0 && (
+              <span className={`badge badge-sm ${isInverted ? 'badge-warning' : 'badge-primary'}`}>
+                {activeCount}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Invert toggle and mode status */}
+        <div className="flex items-center justify-between mb-2 text-xs">
+          <span className={isInverted ? 'text-warning font-medium' : 'text-base-content/60'}>
+            {isInverted ? 'Exclude matches:' : 'Match:'}
+          </span>
+          <button
+            type="button"
+            className={`btn btn-xs gap-1 h-6 min-h-0 px-2 ${
+              isInverted
+                ? 'btn-warning text-warning-content font-medium shadow-xs'
+                : 'btn-ghost text-base-content/60 hover:text-base-content hover:bg-base-200'
+            }`}
+            onClick={() => toggleInvert(column.id)}
+            title={isInverted ? 'Switch to normal match (include selected)' : 'Invert match (exclude items matching selected)'}
+          >
+            {isInverted ? (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.366zm1.414-1.414L6.525 5.11a6 6 0 018.366 8.366zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+                </svg>
+                Inverted
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                Invert
+              </>
+            )}
+          </button>
         </div>
         
         <div className="space-y-1">
@@ -115,11 +186,11 @@ export function FilterPanel({
             <label key={value} className="flex items-center gap-2 cursor-pointer hover:bg-base-200 px-2 py-1 rounded">
               <input
                 type="checkbox"
-                className="checkbox checkbox-sm"
-                checked={activeFilters.has(value)}
+                className={`checkbox checkbox-sm ${isInverted ? 'checkbox-warning' : 'checkbox-primary'}`}
+                checked={activeValues.has(value)}
                 onChange={() => toggleFilter(column.id, value)}
               />
-              <span className="text-sm">
+              <span className="text-sm truncate">
                 {value === '__empty__' ? (
                   <span className="text-base-content/50 italic">(Empty)</span>
                 ) : (

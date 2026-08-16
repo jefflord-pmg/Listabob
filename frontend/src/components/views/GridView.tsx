@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import type { Column, Item, ColumnType, View } from '../../types';
+import type { Column, Item, ColumnType, View, ColumnFilter } from '../../types';
 import { useCreateItem, useUpdateItem, useDeleteItem, useRestoreItem } from '../../hooks/useItems';
 import { useAddColumn, useDeleteColumn, useUpdateColumn, useReorderColumns, useUpdateView, useCreateView, useDeleteView } from '../../hooks/useLists';
 import { AddColumnModal, EditColumnModal } from '../columns';
@@ -60,7 +60,7 @@ export function GridView({ listId, listName, columns, items, views, showInternal
   const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
   const [editingColumn, setEditingColumn] = useState<Column | null>(null);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
-  const [filters, setFilters] = useState<Record<string, Set<string>>>({});
+  const [filters, setFilters] = useState<Record<string, ColumnFilter>>({});
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [isSaveFilterModalOpen, setIsSaveFilterModalOpen] = useState(false);
   const [newFilterName, setNewFilterName] = useState('');
@@ -80,10 +80,21 @@ export function GridView({ listId, listName, columns, items, views, showInternal
     if (activeViewId) {
       const view = views.find(v => v.id === activeViewId);
       if (view?.config?.filters) {
-        const savedFilters = view.config.filters as Record<string, string[]>;
-        const loadedFilters: Record<string, Set<string>> = {};
-        for (const [colId, values] of Object.entries(savedFilters)) {
-          loadedFilters[colId] = new Set(values);
+        const savedFilters = view.config.filters as Record<string, unknown>;
+        const loadedFilters: Record<string, ColumnFilter> = {};
+        for (const [colId, filterData] of Object.entries(savedFilters)) {
+          if (Array.isArray(filterData)) {
+            loadedFilters[colId] = {
+              values: new Set(filterData as string[]),
+              inverted: false,
+            };
+          } else if (filterData && typeof filterData === 'object' && 'values' in filterData) {
+            const fd = filterData as { values?: string[]; inverted?: boolean };
+            loadedFilters[colId] = {
+              values: new Set(Array.isArray(fd.values) ? fd.values : []),
+              inverted: !!fd.inverted,
+            };
+          }
         }
         setFilters(loadedFilters);
       }
@@ -145,11 +156,13 @@ export function GridView({ listId, listName, columns, items, views, showInternal
     }
     
     // Then apply column-specific filters
-    if (Object.keys(filters).length === 0) return result;
+    const activeFilterEntries = Object.entries(filters).filter(([, f]) => f && f.values.size > 0);
+    if (activeFilterEntries.length === 0) return result;
     
     return result.filter(item => {
-      // Check all active filters - item must match ALL column filters
-      for (const [columnId, filterValues] of Object.entries(filters)) {
+      // Check all active filters - item must pass ALL column filters
+      for (const [columnId, filter] of activeFilterEntries) {
+        const { values: filterValues, inverted } = filter;
         if (filterValues.size === 0) continue;
         
         const column = columns.find(c => c.id === columnId);
@@ -158,41 +171,31 @@ export function GridView({ listId, listName, columns, items, views, showInternal
         const itemValue = item.values[columnId];
         const isEmpty = itemValue === null || itemValue === undefined || itemValue === '';
         
-        // Check if filtering for empty
-        if (filterValues.has('__empty__') && isEmpty) {
-          continue; // Matches empty filter
-        }
+        let isMatch = false;
         
         if (isEmpty) {
-          return false; // Item is empty but not filtering for empty
-        }
-        
-        // Handle different column types
-        if (column.column_type === 'multiple_choice' && typeof itemValue === 'string') {
+          isMatch = filterValues.has('__empty__');
+        } else if (column.column_type === 'multiple_choice' && typeof itemValue === 'string') {
           // For multiple choice, match if ANY of the item's values match ANY filter value
           const itemValues = itemValue.split(',').map(v => v.trim().toLowerCase());
           const filterLower = new Set([...filterValues].map(v => v.toLowerCase()));
-          const hasMatch = itemValues.some(v => filterLower.has(v));
-          if (!hasMatch && !filterValues.has('__empty__')) {
-            return false;
-          }
+          isMatch = itemValues.some(v => filterLower.has(v));
         } else if (column.column_type === 'boolean') {
           const boolStr = itemValue ? 'Yes' : 'No';
-          if (!filterValues.has(boolStr)) {
-            return false;
-          }
+          isMatch = filterValues.has(boolStr);
         } else if (column.column_type === 'text') {
           // Case-insensitive match for text columns
           const itemLower = String(itemValue).toLowerCase();
           const filterLower = new Set([...filterValues].map(v => v.toLowerCase()));
-          if (!filterLower.has(itemLower)) {
-            return false;
-          }
+          isMatch = filterLower.has(itemLower);
         } else {
           // For other types, exact match
-          if (!filterValues.has(String(itemValue))) {
-            return false;
-          }
+          isMatch = filterValues.has(String(itemValue));
+        }
+        
+        // If inverted, item matches if it does NOT match the selected filter values
+        if (inverted ? isMatch : !isMatch) {
+          return false;
         }
       }
       return true;
@@ -295,11 +298,14 @@ export function GridView({ listId, listName, columns, items, views, showInternal
   };
 
   // Convert filters to serializable format for saving
-  const serializeFilters = (f: Record<string, Set<string>>) => {
-    const result: Record<string, string[]> = {};
-    for (const [colId, values] of Object.entries(f)) {
-      if (values.size > 0) {
-        result[colId] = Array.from(values);
+  const serializeFilters = (f: Record<string, ColumnFilter>) => {
+    const result: Record<string, { values: string[]; inverted: boolean }> = {};
+    for (const [colId, filter] of Object.entries(f)) {
+      if (filter && filter.values.size > 0) {
+        result[colId] = {
+          values: Array.from(filter.values),
+          inverted: !!filter.inverted,
+        };
       }
     }
     return result;
@@ -402,7 +408,7 @@ export function GridView({ listId, listName, columns, items, views, showInternal
 
   const handleAddRow = async () => {
     // Clear filters so the new row is visible
-    if (simpleFilter || Object.keys(filters).length > 0) {
+    if (simpleFilter || Object.values(filters).some(f => f && f.values.size > 0)) {
       setSimpleFilter('');
       setFilters({});
       setActiveViewId(null);
@@ -681,7 +687,7 @@ export function GridView({ listId, listName, columns, items, views, showInternal
     }
   };
 
-  const hasActiveFilters = Object.keys(filters).length > 0 && Object.values(filters).some(s => s.size > 0);
+  const hasActiveFilters = Object.values(filters).some(f => f && f.values.size > 0);
   const activeFilterView = activeViewId ? views.find(v => v.id === activeViewId) : null;
 
   return (
@@ -722,7 +728,7 @@ export function GridView({ listId, listName, columns, items, views, showInternal
             </svg>
             Filter
             {hasActiveFilters && (
-              <span className="badge badge-sm">{Object.values(filters).reduce((sum, s) => sum + s.size, 0)}</span>
+              <span className="badge badge-sm">{Object.values(filters).reduce((sum, f) => sum + (f?.values.size || 0), 0)}</span>
             )}
           </button>
           
