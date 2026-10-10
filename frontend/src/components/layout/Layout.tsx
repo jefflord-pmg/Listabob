@@ -7,8 +7,16 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
+const SIDEBAR_STORAGE_KEY = 'sidebarOpen';
+
 export function Layout({ children }: LayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY);
+      if (stored !== null) return stored === 'true';
+    }
+    return true;
+  });
   const [isMobile, setIsMobile] = useState(false);
   const [systemModalOpen, setSystemModalOpen] = useState(false);
   const userToggledRef = useRef(false); // Track if user manually toggled
@@ -48,6 +56,13 @@ export function Layout({ children }: LayoutProps) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  // Remember desktop sidebar state across reloads (mobile always starts closed)
+  useEffect(() => {
+    if (!isMobile) {
+      localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarOpen));
+    }
+  }, [sidebarOpen, isMobile]);
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');

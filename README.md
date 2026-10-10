@@ -286,6 +286,34 @@ For preview releases:
 gh release create "preview-1" Listabob.7z
 ```
 
+## Build Troubleshooting
+
+### 2026-10-10
+
+**PyInstaller fails with "icon image ... is not in the correct format"**
+- Cause: `listabob.spec` uses `frontend/public/lb-1.jpg`. On Windows, PyInstaller accepts only `.exe` or `.ico` icons and converts `.jpg` only when Pillow is installed in the build venv.
+- Fix: `backend\venv\Scripts\python.exe -m pip install pillow`, then run `build.bat` again. Alternatively, convert the icon to `.ico` and update `icon=` in `listabob.spec`.
+
+**Packaged exe fails with `ModuleNotFoundError: No module named 'uvicorn'`**
+- Cause: The build venv was missing the app's dependencies. `build.bat` installs only PyInstaller, not `backend\requirements.txt`.
+- Fix: `backend\venv\Scripts\python.exe -m pip install -r backend\requirements.txt`, then run `build.bat` again.
+
+**Installed app uses default settings (password `listabob`, port 8000)**
+- Cause: The `config.json` in the install folder (`C:\Users\<YourUsername>\AppData\Local\Listabob\`) was replaced with defaults. The cause is not yet known. `run_standalone.py` writes these defaults when the file is missing.
+- Fix: Restore `config.json` from your backup, then restart the app.
+
+**Wrong port: the app is not on the port you expect**
+- The port is set by `"port"` in `config.json` (default 8000). Your install may use another port, such as 8654.
+- Development: the backend runs on port 8000 and the Vite dev server on 5173. Use http://localhost:5173 while developing.
+- Packaged app: the backend serves the frontend too, so use the backend port (http://localhost:8000 by default).
+
+**Frontend server (development only)**
+- The Vite dev server (port 5173) compiles the React code and hot-reloads while you develop. The packaged app doesn't need it.
+- `npm run build` compiles the frontend once into `frontend/dist`, and the backend serves those files. Rebuild only after frontend source changes; `build.bat` does this.
+
+**Open: `dist\Listabob\config.json` missing after a test run**
+- After running the exe from `dist\Listabob`, the expected `config.json` didn't appear. Not yet explained.
+
 ## License
 
 MIT
