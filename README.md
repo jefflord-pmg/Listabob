@@ -311,8 +311,9 @@ gh release create "preview-1" Listabob.7z
 - The Vite dev server (port 5173) compiles the React code and hot-reloads while you develop. The packaged app doesn't need it.
 - `npm run build` compiles the frontend once into `frontend/dist`, and the backend serves those files. Rebuild only after frontend source changes; `build.bat` does this.
 
-**Open: `dist\Listabob\config.json` missing after a test run**
-- After running the exe from `dist\Listabob`, the expected `config.json` didn't appear. Not yet explained.
+**`dist\Listabob\config.json` missing after a test run**
+- Cause: Running the exe from `dist\Listabob` creates a default `config.json` there. A later rebuild (`build.bat`, which runs PyInstaller with `--clean`) deletes the whole `dist\Listabob` folder, including that file.
+- This is expected. Keep your real settings in the installed copy under `AppData\Local\Listabob`, not in `dist`.
 
 ## License
 
